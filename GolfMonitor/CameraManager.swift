@@ -127,14 +127,6 @@ final class CameraManager: NSObject, ObservableObject {
         videoOutput.setSampleBufferDelegate(self, queue: videoQueue)
         guard session.canAddOutput(videoOutput) else { throw CameraSetupError.cannotAddOutput }
         session.addOutput(videoOutput)
-
-        if let connection = videoOutput.connection(with: .video),
-           connection.isVideoRotationAngleSupported(0) {
-            // Tripod side view: phone mounted in landscape, home button right.
-            // (Angles are measured from the sensor's native landscape
-            // orientation, so landscape-home-right is 0°.)
-            connection.videoRotationAngle = 0
-        }
     }
 
     /// Picks the format with the best slow-motion capability: prefers 240 fps,
@@ -188,25 +180,39 @@ final class CameraManager: NSObject, ObservableObject {
         }
     }
 
-    /// Rotates the preview layer to match how the phone is held.
-    /// Note: videoRotationAngle is measured from the sensor's native
-    /// orientation (landscape), not from portrait — so portrait is 270°.
-    /// Called when the view appears, when the session starts, and on every
-    /// device rotation.
+    /// Rotation angle that makes the image upright for the given device
+    /// orientation. Angles are measured from the sensor's native landscape
+    /// orientation (so portrait is 90°, not 0°).
+    static func rotationAngle(for orientation: UIDeviceOrientation) -> CGFloat? {
+        switch orientation {
+        case .portrait: return 90
+        case .landscapeLeft: return 0       // home button on the right
+        case .landscapeRight: return 180    // home button on the left
+        case .portraitUpsideDown: return 270
+        default: return nil // face up/down, unknown: leave as-is
+        }
+    }
+
+    /// Rotates the preview layer — and the capture output feeding the
+    /// recorder — to match how the phone is held. Called when the view
+    /// appears, when the session starts, and on every device rotation.
     func updatePreviewOrientation() {
         DispatchQueue.main.async {
-            guard let connection = self.previewLayer.connection else { return }
-            let angle: CGFloat
-            switch UIDevice.current.orientation {
-            case .portrait: angle = 90
-            case .landscapeLeft: angle = 0       // home button on the right
-            case .landscapeRight: angle = 180    // home button on the left
-            case .portraitUpsideDown: angle = 270
-            default: return // face up/down, unknown: leave as-is
-            }
-            guard connection.isVideoRotationAngleSupported(angle) else { return }
-            if connection.videoRotationAngle != angle {
+            guard let angle = Self.rotationAngle(for: UIDevice.current.orientation) else { return }
+            // Preview layer: always follow.
+            if let connection = self.previewLayer.connection,
+               connection.isVideoRotationAngleSupported(angle),
+               connection.videoRotationAngle != angle {
                 connection.videoRotationAngle = angle
+            }
+            // Capture output: follow when not recording (a mid-clip change
+            // would swap buffer dimensions mid-file).
+            self.videoQueue.async {
+                guard !self.isRecording,
+                      let outConnection = self.videoOutput.connection(with: .video),
+                      outConnection.isVideoRotationAngleSupported(angle),
+                      outConnection.videoRotationAngle != angle else { return }
+                outConnection.videoRotationAngle = angle
             }
         }
     }
@@ -251,7 +257,19 @@ final class CameraManager: NSObject, ObservableObject {
                 DispatchQueue.main.async { completion(nil) }
                 return
             }
+            // Pin the capture orientation to how the phone is held right now,
+            // so the clip comes out upright (a rotation could otherwise land
+            // after the last preview update).
+            let angle = Self.rotationAngle(for: UIDevice.current.orientation) ?? 0
+            if let outConnection = self.videoOutput.connection(with: .video),
+               outConnection.isVideoRotationAngleSupported(angle) {
+                outConnection.videoRotationAngle = angle
+            }
             let dims = CMVideoFormatDescriptionGetDimensions(device.activeFormat.formatDescription)
+            // Buffers arrive pre-rotated: portrait angles swap width/height.
+            let isPortraitAngle = (angle == 90 || angle == 270)
+            let outWidth = isPortraitAngle ? Int(dims.height) : Int(dims.width)
+            let outHeight = isPortraitAngle ? Int(dims.width) : Int(dims.height)
             let url = FileManager.default.temporaryDirectory
                 .appendingPathComponent("shot-\(UUID().uuidString).mov")
 
@@ -261,8 +279,8 @@ final class CameraManager: NSObject, ObservableObject {
             }
             let settings: [String: Any] = [
                 AVVideoCodecKey: AVVideoCodecType.h264,
-                AVVideoWidthKey: Int(dims.width),
-                AVVideoHeightKey: Int(dims.height)
+                AVVideoWidthKey: outWidth,
+                AVVideoHeightKey: outHeight
             ]
             let input = AVAssetWriterInput(mediaType: .video, outputSettings: settings)
             input.expectsMediaDataInRealTime = true

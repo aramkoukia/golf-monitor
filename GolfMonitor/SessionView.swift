@@ -76,17 +76,16 @@ struct SessionView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color(.systemBackground).ignoresSafeArea()
-
                 switch phase {
-                case .idle: idleView
-                case .countdown: countdownView
-                case .recording: recordingView
-                case .processing: processingView
-                case .result: resultView
+                case .idle: cameraStage { idleControls }
+                case .countdown: cameraStage { countdownContent }
+                case .recording: cameraStage { recordingContent }
+                case .processing: cameraStage { processingContent }
+                case .result: resultView.background(Color(.systemBackground))
                 }
             }
             .navigationTitle("Session")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     calibrationBadge
@@ -110,40 +109,55 @@ struct SessionView: View {
         }
     }
 
-    // MARK: Idle — viewfinder + record button
+    // MARK: Full-bleed camera stage
 
-    private var idleView: some View {
-        VStack(spacing: 16) {
+    /// Full-bleed camera with overlay content on top. The nav bar and tab bar
+    /// stay visible; the video extends under the nav bar.
+    private func cameraStage<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        ZStack {
             if camera.isSessionRunning {
                 CameraPreviewView(previewLayer: camera.previewLayer)
-                    .frame(maxWidth: .infinity)
-                    .aspectRatio(16 / 9, contentMode: .fit)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    .overlay(alignment: .topLeading) {
-                        Text(camera.selectedFPS > 0 ? String(format: "%.0f fps · %@", camera.selectedFPS, camera.selectedResolution) : "starting camera…")
-                            .font(.caption.monospacedDigit())
-                            .padding(8)
-                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
-                            .padding(10)
-                    }
-                    .padding(.horizontal)
+                    .ignoresSafeArea(edges: .top)
             } else {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.secondary.opacity(0.15))
-                    .frame(height: 260)
-                    .overlay {
-                        Text(camera.lastError ?? "Starting camera…")
-                            .foregroundStyle(.secondary)
-                            .padding()
-                    }
-                    .padding(.horizontal)
+                Color(.systemBackground).ignoresSafeArea(edges: .top)
+            }
+            content()
+        }
+    }
+
+    // MARK: Idle — floating record button over the video
+
+    private var idleControls: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text(camera.selectedFPS > 0 ? String(format: "%.0f fps · %@", camera.selectedFPS, camera.selectedResolution) : "starting camera…")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.white)
+                    .padding(8)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+                Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.top, 8)
+            .opacity(camera.isSessionRunning ? 1 : 0)
+
+            if !camera.isSessionRunning {
+                Spacer()
+                Text(camera.lastError ?? "Starting camera…")
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding()
             }
 
             if let err = errorMessage {
                 Text(err)
                     .font(.callout)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(.red.opacity(0.85), in: Capsule())
                     .padding(.horizontal)
+                    .padding(.top, 8)
             }
 
             Spacer()
@@ -152,55 +166,72 @@ struct SessionView: View {
                 camera.lockFocusAndExposure()
                 startShot()
             } label: {
-                Text("Record Shot")
-                    .font(.title2.bold())
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 16))
-                    .foregroundStyle(.white)
+                HStack(spacing: 10) {
+                    Image(systemName: "record.circle.fill")
+                    Text("Record Shot")
+                        .font(.title3.bold())
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 30)
+                .padding(.vertical, 15)
+                .background(camera.isAuthorized && camera.isSessionRunning ? Color.accentColor : Color.gray,
+                            in: Capsule())
+                .shadow(color: .black.opacity(0.35), radius: 10, y: 4)
             }
             .disabled(!camera.isAuthorized || !camera.isSessionRunning)
-            .padding(.horizontal)
-            .padding(.bottom, 24)
+            .padding(.bottom, 18)
         }
     }
 
-    // MARK: Countdown / recording / processing
+    // MARK: Countdown / recording / processing overlays
 
-    private var countdownView: some View {
+    private var countdownContent: some View {
         VStack {
             Spacer()
             Text("\(countdownValue)")
                 .font(.system(size: 120, weight: .heavy))
                 .monospacedDigit()
+                .foregroundStyle(.white)
+                .shadow(radius: 12)
             Text("Get ready — swing on zero")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.white)
+                .shadow(radius: 6)
             Spacer()
         }
     }
 
-    private var recordingView: some View {
+    private var recordingContent: some View {
         VStack(spacing: 12) {
             Spacer()
-            ProgressView()
-                .scaleEffect(1.5)
-            Text("Recording… swing now!")
-                .font(.title3.bold())
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(.red)
+                    .frame(width: 12, height: 12)
+                Text("Recording… swing now!")
+                    .font(.title3.bold())
+                    .foregroundStyle(.white)
+            }
+            .shadow(radius: 6)
             Text("Capturing \(Int(clipDuration))s at high frame rate")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.white.opacity(0.85))
+                .shadow(radius: 6)
             Spacer()
         }
     }
 
-    private var processingView: some View {
+    private var processingContent: some View {
         VStack(spacing: 12) {
             Spacer()
             ProgressView()
                 .scaleEffect(1.5)
+                .tint(.white)
             Text(processingStatus)
                 .font(.title3.bold())
+                .foregroundStyle(.white)
+                .shadow(radius: 6)
             Text("Tracking the ball frame by frame")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.white.opacity(0.85))
+                .shadow(radius: 6)
             Spacer()
         }
     }
@@ -487,4 +518,3 @@ enum TracerRenderer {
         return UIImage(cgImage: cg)
     }
 }
-
