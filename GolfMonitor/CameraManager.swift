@@ -129,9 +129,11 @@ final class CameraManager: NSObject, ObservableObject {
         session.addOutput(videoOutput)
 
         if let connection = videoOutput.connection(with: .video),
-           connection.isVideoRotationAngleSupported(90) {
-            // Tripod side view: phone mounted in landscape (home button right).
-            connection.videoRotationAngle = 90
+           connection.isVideoRotationAngleSupported(0) {
+            // Tripod side view: phone mounted in landscape, home button right.
+            // (Angles are measured from the sensor's native landscape
+            // orientation, so landscape-home-right is 0°.)
+            connection.videoRotationAngle = 0
         }
     }
 
@@ -169,7 +171,10 @@ final class CameraManager: NSObject, ObservableObject {
         sessionQueue.async {
             guard !self.session.isRunning else { return }
             self.session.startRunning()
-            DispatchQueue.main.async { self.isSessionRunning = true }
+            DispatchQueue.main.async {
+                self.isSessionRunning = true
+                self.updatePreviewOrientation()
+            }
         }
     }
 
@@ -184,16 +189,19 @@ final class CameraManager: NSObject, ObservableObject {
     }
 
     /// Rotates the preview layer to match how the phone is held.
-    /// Called when the view appears and on every device rotation.
+    /// Note: videoRotationAngle is measured from the sensor's native
+    /// orientation (landscape), not from portrait — so portrait is 270°.
+    /// Called when the view appears, when the session starts, and on every
+    /// device rotation.
     func updatePreviewOrientation() {
         DispatchQueue.main.async {
             guard let connection = self.previewLayer.connection else { return }
             let angle: CGFloat
             switch UIDevice.current.orientation {
-            case .portrait: angle = 0
-            case .landscapeLeft: angle = 90      // home button on the right
-            case .landscapeRight: angle = 270    // home button on the left
-            case .portraitUpsideDown: angle = 180
+            case .portrait: angle = 90
+            case .landscapeLeft: angle = 0       // home button on the right
+            case .landscapeRight: angle = 180    // home button on the left
+            case .portraitUpsideDown: angle = 270
             default: return // face up/down, unknown: leave as-is
             }
             guard connection.isVideoRotationAngleSupported(angle) else { return }
@@ -353,4 +361,3 @@ enum CameraSetupError: Error {
     case cannotAddInput
     case cannotAddOutput
 }
-
