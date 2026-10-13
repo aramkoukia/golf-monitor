@@ -1,24 +1,42 @@
 import SwiftUI
 import AVFoundation
 import UIKit
+import Combine
 
 // MARK: - Camera preview wrapper (shared by Session & Setup tabs)
+
+/// UIView that keeps the preview layer sized to its bounds on every layout
+/// pass (including rotation), so the viewfinder always fills its frame.
+final class PreviewContainerView: UIView {
+    var previewLayer: AVCaptureVideoPreviewLayer? {
+        didSet {
+            oldValue?.removeFromSuperlayer()
+            if let layer = previewLayer {
+                layer.videoGravity = .resizeAspectFill
+                self.layer.addSublayer(layer)
+                setNeedsLayout()
+            }
+        }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        previewLayer?.frame = bounds
+    }
+}
 
 struct CameraPreviewView: UIViewRepresentable {
     var previewLayer: AVCaptureVideoPreviewLayer
 
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView()
+    func makeUIView(context: Context) -> PreviewContainerView {
+        let view = PreviewContainerView()
         view.backgroundColor = .black
-        previewLayer.videoGravity = .resizeAspectFill
-        view.layer.addSublayer(previewLayer)
+        view.previewLayer = previewLayer
         return view
     }
 
-    func updateUIView(_ uiView: UIView, context: Context) {
-        DispatchQueue.main.async {
-            self.previewLayer.frame = uiView.bounds
-        }
+    func updateUIView(_ uiView: PreviewContainerView, context: Context) {
+        uiView.previewLayer = previewLayer
     }
 }
 
@@ -75,7 +93,12 @@ struct SessionView: View {
                 }
             }
             .onAppear {
+                UIDevice.current.beginGeneratingDeviceOrientationNotifications()
                 camera.requestPermission()
+                camera.updatePreviewOrientation()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
+                camera.updatePreviewOrientation()
             }
             .onChange(of: camera.isAuthorized) { _, authorized in
                 if authorized { camera.startSession() }
@@ -93,6 +116,8 @@ struct SessionView: View {
         VStack(spacing: 16) {
             if camera.isSessionRunning {
                 CameraPreviewView(previewLayer: camera.previewLayer)
+                    .frame(maxWidth: .infinity)
+                    .aspectRatio(16 / 9, contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
                     .overlay(alignment: .topLeading) {
                         Text(camera.selectedFPS > 0 ? String(format: "%.0f fps · %@", camera.selectedFPS, camera.selectedResolution) : "starting camera…")
@@ -462,3 +487,4 @@ enum TracerRenderer {
         return UIImage(cgImage: cg)
     }
 }
+

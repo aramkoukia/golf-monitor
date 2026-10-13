@@ -1,5 +1,6 @@
 import SwiftUI
 import AVFoundation
+import Combine
 
 /// Setup tab: phone-to-ball distance, camera position, ball-diameter
 /// calibration (pixel→meter scale), and display-unit settings.
@@ -111,7 +112,12 @@ struct CalibrationView: View {
                 calibration = cal
                 useFeet = cal.useFeet
                 distanceText = String(format: "%.1f", useFeet ? cal.distanceToBallMeters * 3.28084 : cal.distanceToBallMeters)
+                UIDevice.current.beginGeneratingDeviceOrientationNotifications()
                 camera.requestPermission()
+                camera.updatePreviewOrientation()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
+                camera.updatePreviewOrientation()
             }
             .onChange(of: camera.isAuthorized) { _, authorized in
                 if authorized { camera.startSession() }
@@ -159,3 +165,4 @@ struct CalibrationView: View {
         showSaved = true
     }
 }
+

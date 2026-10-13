@@ -46,8 +46,14 @@ final class CameraManager: NSObject, ObservableObject {
     func requestPermission() {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
-            DispatchQueue.main.async { self.isAuthorized = true }
             setupSessionIfNeeded()
+            DispatchQueue.main.async {
+                self.isAuthorized = true
+                // Tab switches stop the session (see stopSession); restart it
+                // here. startSession is a no-op if already running, and the
+                // onChange handler covers first-time authorization.
+                self.startSession()
+            }
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { granted in
                 DispatchQueue.main.async { self.isAuthorized = granted }
@@ -123,9 +129,9 @@ final class CameraManager: NSObject, ObservableObject {
         session.addOutput(videoOutput)
 
         if let connection = videoOutput.connection(with: .video),
-           connection.isVideoOrientationSupported {
-            // Tripod side view: phone mounted in landscape.
-            connection.videoOrientation = .landscapeRight
+           connection.isVideoRotationAngleSupported(90) {
+            // Tripod side view: phone mounted in landscape (home button right).
+            connection.videoRotationAngle = 90
         }
     }
 
@@ -174,6 +180,26 @@ final class CameraManager: NSObject, ObservableObject {
             guard self.session.isRunning else { return }
             self.session.stopRunning()
             DispatchQueue.main.async { self.isSessionRunning = false }
+        }
+    }
+
+    /// Rotates the preview layer to match how the phone is held.
+    /// Called when the view appears and on every device rotation.
+    func updatePreviewOrientation() {
+        DispatchQueue.main.async {
+            guard let connection = self.previewLayer.connection else { return }
+            let angle: CGFloat
+            switch UIDevice.current.orientation {
+            case .portrait: angle = 0
+            case .landscapeLeft: angle = 90      // home button on the right
+            case .landscapeRight: angle = 270    // home button on the left
+            case .portraitUpsideDown: angle = 180
+            default: return // face up/down, unknown: leave as-is
+            }
+            guard connection.isVideoRotationAngleSupported(angle) else { return }
+            if connection.videoRotationAngle != angle {
+                connection.videoRotationAngle = angle
+            }
         }
     }
 
@@ -327,3 +353,4 @@ enum CameraSetupError: Error {
     case cannotAddInput
     case cannotAddOutput
 }
+
