@@ -13,6 +13,9 @@ final class CameraManager: NSObject, ObservableObject {
     /// Frames per second actually selected (e.g. 240).
     @Published var selectedFPS: Double = 0
     @Published var selectedResolution: String = ""
+    /// Horizontal field of view (degrees) of the selected format — used to
+    /// turn the ball's apparent size into a distance estimate.
+    @Published var fieldOfViewDegrees: Double = 0
     @Published var lastError: String?
 
     // MARK: Capture pipeline
@@ -103,6 +106,7 @@ final class CameraManager: NSObject, ObservableObject {
             DispatchQueue.main.async {
                 self.selectedFPS = fps
                 self.selectedResolution = "\(dims.width)×\(dims.height)"
+                self.fieldOfViewDegrees = Double(format.videoFieldOfView)
             }
         }
 

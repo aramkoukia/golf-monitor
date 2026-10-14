@@ -26,6 +26,16 @@ struct TrackingResult {
     var ballFound: Bool = false
 }
 
+/// One detected ball in a single frame (calibration).
+struct DetectedBall {
+    /// Ball center in frame pixels (same space as frameWidth/frameHeight).
+    var center: CGPoint
+    /// Estimated ball diameter in pixels.
+    var diameter: Double
+    var frameWidth: Int
+    var frameHeight: Int
+}
+
 // MARK: - Tracking engine
 
 /// Frame-by-frame analysis of a recorded swing clip.
@@ -161,29 +171,103 @@ final class TrackingEngine {
 
     // MARK: Ball diameter detection (calibration)
 
-    /// Finds the most ball-like bright blob in a single frame and returns its
-    /// estimated diameter in pixels. Used by the calibration screen.
-    static func detectBallDiameter(in sampleBuffer: CMSampleBuffer) -> Double? {
+    /// Finds the ball in a single frame: its center, estimated diameter
+    /// (px), and the frame size the measurement is in. Shape is judged from
+    /// second moments (the grid-snapped bbox is too coarse at ball sizes),
+    /// and local contrast does the heavy lifting against bright clutter.
+    /// An empty frame returns nil instead of a hallucinated ball.
+    static func detectBall(in sampleBuffer: CMSampleBuffer) -> DetectedBall? {
         let engine = TrackingEngine()
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer),
               let gray = GrayImage(from: pixelBuffer),
-              let bright = gray.thresholded(at: engine.brightThreshold)
+              // Slightly lower threshold than tracking (205) so more of the
+              // ball's surface joins the blob — rounder, truer size.
+              let bright = gray.thresholded(at: 190)
         else { return nil }
         defer { gray.free(); bright.free() }
 
         let w = Double(gray.width), h = Double(gray.height)
-        // Prefer blobs near the center of the frame (user frames the ball there).
         let center = CGPoint(x: w / 2, y: h / 2)
-        let blobs = engine.scanBlobs(in: bright, roi: CGRect(x: 0, y: 0, width: w, height: h), minPixels: 12)
-            .filter { $0.aspectRatio < 1.6 }   // roundish only
-            .sorted { hypot($0.centroid.x - center.x, $0.centroid.y - center.y)
-                      < hypot($1.centroid.x - center.x, $1.centroid.y - center.y) }
-        guard let best = blobs.first else { return nil }
-        // Diameter from area (robust to partial occlusion) and bbox (sanity).
-        let areaDiameter = 2.0 * sqrt(Double(best.pixelCount) / Double.pi)
-        let bboxDiameter = (best.bbox.width + best.bbox.height) / 2.0
-        // Blend, trusting area more.
-        return areaDiameter * 0.7 + bboxDiameter * 0.3
+
+        // Plausible ball size at any sane phone distance (~0.5–8 m).
+        // Referenced to the LONG side of the frame: that's rotation-
+        // invariant (the ball's pixel size doesn't change when the phone
+        // rotates — only the crop does), so the band means the same thing
+        // in portrait and landscape.
+        let ref = max(w, h)
+        let minDiameter = ref * 0.0035
+        let maxDiameter = ref * 0.06
+
+        let candidates = engine.scanBlobs(in: bright, roi: CGRect(x: 0, y: 0, width: w, height: h), minPixels: 12)
+            .compactMap { blob -> DetectedBall? in
+                let areaDiameter = 2.0 * sqrt(Double(blob.pixelCount) / Double.pi)
+                guard areaDiameter >= minDiameter, areaDiameter <= maxDiameter else { return nil }
+                // Round, by second moments (1.0 = circular).
+                guard blob.elongation <= 1.5 else { return nil }
+                // Local contrast: bright inside AND clearly brighter than
+                // the ring around it. Sky, walls, and lit concrete fail —
+                // their surroundings are just as bright.
+                let innerRect = blob.bbox.insetBy(dx: blob.bbox.width * 0.2, dy: blob.bbox.height * 0.2)
+                let inner = regionMean(gray, innerRect)
+                guard inner >= 140 else { return nil }
+                let ring = ringMean(gray, around: blob.bbox)
+                guard inner - ring >= 20 else { return nil }
+                // Diameter from area and bbox, trusting area more.
+                let bboxDiameter = (Double(blob.bbox.width) + Double(blob.bbox.height)) / 2.0
+                let diameter = areaDiameter * 0.7 + bboxDiameter * 0.3
+                return DetectedBall(center: blob.centroid, diameter: diameter,
+                                    frameWidth: gray.width, frameHeight: gray.height)
+            }
+            // Nearest to frame center wins among the survivors.
+            .sorted { hypot($0.center.x - center.x, $0.center.y - center.y)
+                      < hypot($1.center.x - center.x, $1.center.y - center.y) }
+        return candidates.first
+    }
+
+    /// Mean gray level inside a rect (sampled every 2nd pixel).
+    private static func regionMean(_ gray: GrayImage, _ rect: CGRect) -> Double {
+        let x0 = max(0, Int(rect.minX)), x1 = min(gray.width - 1, Int(rect.maxX))
+        let y0 = max(0, Int(rect.minY)), y1 = min(gray.height - 1, Int(rect.maxY))
+        guard x1 > x0, y1 > y0 else { return 0 }
+        var sum = 0.0, n = 0.0
+        var y = y0
+        while y <= y1 {
+            var x = x0
+            while x <= x1 {
+                sum += Double(gray.pixels[y * gray.width + x])
+                n += 1
+                x += 2
+            }
+            y += 2
+        }
+        return n > 0 ? sum / n : 0
+    }
+
+    /// Mean gray level in the frame just outside a rect: the rect grown by
+    /// 75% on each side, excluding the rect itself.
+    private static func ringMean(_ gray: GrayImage, around rect: CGRect) -> Double {
+        let outer = rect.insetBy(dx: -rect.width * 0.75, dy: -rect.height * 0.75)
+        let x0 = max(0, Int(outer.minX)), x1 = min(gray.width - 1, Int(outer.maxX))
+        let y0 = max(0, Int(outer.minY)), y1 = min(gray.height - 1, Int(outer.maxY))
+        guard x1 > x0, y1 > y0 else { return 0 }
+        var sum = 0.0, n = 0.0
+        var y = y0
+        while y <= y1 {
+            var x = x0
+            while x <= x1 {
+                if !rect.contains(CGPoint(x: x, y: y)) {
+                    sum += Double(gray.pixels[y * gray.width + x])
+                    n += 1
+                }
+                x += 2
+            }
+            y += 2
+        }
+        return n > 0 ? sum / n : 0
+    }
+
+    static func detectBallDiameter(in sampleBuffer: CMSampleBuffer) -> Double? {
+        detectBall(in: sampleBuffer)?.diameter
     }
 
     // MARK: Blob helpers
@@ -192,9 +276,18 @@ final class TrackingEngine {
         var centroid: CGPoint
         var pixelCount: Int
         var bbox: CGRect
+        /// Second central moments of the blob's pixels.
+        var varX: Double = 0
+        var varY: Double = 0
         var aspectRatio: Double {
             let w = max(bbox.width, 1), h = max(bbox.height, 1)
             return max(w, h) / min(w, h)
+        }
+        /// 1.0 = round. From second moments, so it stays meaningful for
+        /// small blobs where the grid-snapped bbox aspect is too coarse.
+        var elongation: Double {
+            let lo = max(min(varX, varY), 1e-6)
+            return sqrt(max(varX, varY) / lo)
         }
     }
 
@@ -222,6 +315,8 @@ final class TrackingEngine {
         var counts = [Int](repeating: 0, count: gw * gh)
         var sumX = [Double](repeating: 0, count: gw * gh)
         var sumY = [Double](repeating: 0, count: gw * gh)
+        var sumX2 = [Double](repeating: 0, count: gw * gh)
+        var sumY2 = [Double](repeating: 0, count: gw * gh)
 
         let x0 = max(0, Int(roi.minX)), x1 = min(w - 1, Int(roi.maxX))
         let y0 = max(0, Int(roi.minY)), y1 = min(h - 1, Int(roi.maxY))
@@ -238,6 +333,8 @@ final class TrackingEngine {
                         counts[gi] += 1
                         sumX[gi] += Double(x)
                         sumY[gi] += Double(y)
+                        sumX2[gi] += Double(x * x)
+                        sumY2[gi] += Double(y * y)
                     }
                     x += scanStride
                 }
@@ -251,11 +348,11 @@ final class TrackingEngine {
         for i in 0..<(gw * gh) where counts[i] > 0 && !visited[i] {
             var queue = [i]
             visited[i] = true
-            var total = 0, sx = 0.0, sy = 0.0
+            var total = 0, sx = 0.0, sy = 0.0, sxx = 0.0, syy = 0.0
             var minX = Double.greatestFiniteMagnitude, maxX = -Double.greatestFiniteMagnitude
             var minY = Double.greatestFiniteMagnitude, maxY = -Double.greatestFiniteMagnitude
             while let c = queue.popLast() {
-                total += counts[c]; sx += sumX[c]; sy += sumY[c]
+                total += counts[c]; sx += sumX[c]; sy += sumY[c]; sxx += sumX2[c]; syy += sumY2[c]
                 let ccx = c % gw, ccy = c / gw
                 minX = min(minX, Double(ccx * cell)); maxX = max(maxX, Double((ccx + 1) * cell))
                 minY = min(minY, Double(ccy * cell)); maxY = max(maxY, Double((ccy + 1) * cell))
@@ -268,10 +365,13 @@ final class TrackingEngine {
             }
             let pixelCount = Int(Double(total) * scale)
             guard total > 0, pixelCount >= minPixels else { continue }
+            let meanX = sx / Double(total), meanY = sy / Double(total)
             blobs.append(Blob(
-                centroid: CGPoint(x: sx / Double(total), y: sy / Double(total)),
+                centroid: CGPoint(x: meanX, y: meanY),
                 pixelCount: pixelCount,
-                bbox: CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+                bbox: CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY),
+                varX: max(0, sxx / Double(total) - meanX * meanX),
+                varY: max(0, syy / Double(total) - meanY * meanY)
             ))
         }
         return blobs
@@ -381,4 +481,3 @@ private struct GrayImage {
         return GrayImage(pixels: out, width: width, height: height)
     }
 }
-
