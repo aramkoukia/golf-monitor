@@ -65,7 +65,9 @@ struct SessionView: View {
     @State private var countdownValue = 5
     @AppStorage("golfmonitor.countdownSeconds") private var countdownSeconds = 5
     @AppStorage("golfmonitor.clipSeconds") private var clipSeconds = 3
-    @State private var selectedClub: Club = .driver
+    @State private var selectedClub: Club = Club(
+        rawValue: UserDefaults.standard.string(forKey: "golfmonitor.lastClub") ?? ""
+    ) ?? .driver
     @State private var metrics: ShotMetrics?
     @State private var tracerImage: UIImage?
     @State private var processingStatus = "Analyzing frames…"
@@ -108,6 +110,9 @@ struct SessionView: View {
             .onChange(of: camera.isAuthorized) { _, authorized in
                 if authorized { camera.startSession() }
             }
+            .onChange(of: selectedClub) { _, club in
+                UserDefaults.standard.set(club.rawValue, forKey: "golfmonitor.lastClub")
+            }
             .onDisappear { camera.stopSession() }
             .sheet(isPresented: $showShare) {
                 if let img = tracerImage { ShareSheet(items: [img]) }
@@ -146,6 +151,28 @@ struct SessionView: View {
             .padding(.horizontal)
             .padding(.top, 8)
             .opacity(camera.isSessionRunning ? 1 : 0)
+
+            // Club picker — pick before the shot; the result card keeps a
+            // synced copy for last-second corrections before saving.
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(Club.allCases) { club in
+                        Button {
+                            selectedClub = club
+                        } label: {
+                            Text(club.rawValue)
+                                .font(.caption.bold())
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 7)
+                                .background(selectedClub == club ? Color.accentColor : Color.black.opacity(0.35),
+                                            in: Capsule())
+                                .foregroundStyle(.white)
+                        }
+                    }
+                }
+                .padding(.horizontal)
+            }
+            .padding(.top, 8)
 
             if !camera.isSessionRunning {
                 Spacer()
@@ -632,4 +659,3 @@ enum TracerRenderer {
         return UIImage(cgImage: cg)
     }
 }
-
