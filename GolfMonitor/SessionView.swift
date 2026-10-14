@@ -62,7 +62,9 @@ struct SessionView: View {
     private enum Phase { case idle, countdown, recording, processing, result }
 
     @State private var phase: Phase = .idle
-    @State private var countdownValue = 3
+    @State private var countdownValue = 5
+    @AppStorage("golfmonitor.countdownSeconds") private var countdownSeconds = 5
+    @AppStorage("golfmonitor.clipSeconds") private var clipSeconds = 3
     @State private var selectedClub: Club = .driver
     @State private var metrics: ShotMetrics?
     @State private var tracerImage: UIImage?
@@ -70,8 +72,11 @@ struct SessionView: View {
     @State private var errorMessage: String?
     @State private var showShare = false
     @State private var savedConfirmation = false
+    @State private var isDetecting = false
+    @State private var detectMessage: String?
+    @State private var isCalibrated = Calibration.load().isCalibrated
 
-    private let clipDuration = 2.0
+    private var clipDuration: TimeInterval { TimeInterval(clipSeconds) }
 
     var body: some View {
         NavigationStack {
@@ -93,6 +98,7 @@ struct SessionView: View {
             }
             .onAppear {
                 UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+                isCalibrated = Calibration.load().isCalibrated
                 camera.requestPermission()
                 camera.updatePreviewOrientation()
             }
@@ -162,6 +168,48 @@ struct SessionView: View {
 
             Spacer()
 
+            if let msg = detectMessage {
+                Text(msg)
+                    .font(.caption)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.black.opacity(0.5), in: Capsule())
+                    .padding(.bottom, 10)
+            }
+
+            if !isCalibrated {
+                Text("Detect the ball to unlock recording")
+                    .font(.caption)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.black.opacity(0.5), in: Capsule())
+                    .padding(.bottom, 10)
+            }
+
+            durationChips(label: "Countdown", selection: $countdownSeconds)
+                .padding(.bottom, 8)
+            durationChips(label: "Clip", selection: $clipSeconds)
+                .padding(.bottom, 12)
+
+            Button {
+                detectBall()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "scope")
+                    Text(isDetecting ? "Detecting…" : "Detect ball")
+                        .font(.subheadline.bold())
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 10)
+                .background(.ultraThinMaterial, in: Capsule())
+                .shadow(color: .black.opacity(0.25), radius: 6, y: 3)
+            }
+            .disabled(isDetecting || !camera.isAuthorized || !camera.isSessionRunning)
+            .padding(.bottom, 12)
+
             Button {
                 camera.lockFocusAndExposure()
                 startShot()
@@ -174,12 +222,43 @@ struct SessionView: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 30)
                 .padding(.vertical, 15)
-                .background(camera.isAuthorized && camera.isSessionRunning ? Color.accentColor : Color.gray,
+                .background(canRecord ? Color.accentColor : Color.gray,
                             in: Capsule())
                 .shadow(color: .black.opacity(0.35), radius: 10, y: 4)
             }
-            .disabled(!camera.isAuthorized || !camera.isSessionRunning)
+            .disabled(!canRecord)
             .padding(.bottom, 18)
+        }
+    }
+
+    /// iPhone-camera-style duration picker: a row of tappable pills
+    /// (3/5/10/15 s) in a dark capsule — no dropdowns.
+    private func durationChips(label: String, selection: Binding<Int>) -> some View {
+        HStack(spacing: 8) {
+            Text(label.uppercased())
+                .font(.caption2.bold())
+                .foregroundStyle(.white)
+                .shadow(radius: 4)
+                .frame(width: 66, alignment: .trailing)
+            HStack(spacing: 4) {
+                ForEach([3, 5, 10, 15], id: \.self) { sec in
+                    Button {
+                        selection.wrappedValue = sec
+                    } label: {
+                        Text("\(sec)")
+                            .font(.caption.bold())
+                            .frame(width: 32, height: 32)
+                            .background(selection.wrappedValue == sec ? Color.white : Color.white.opacity(0.15), in: Circle())
+                            .foregroundStyle(selection.wrappedValue == sec ? .black : .white)
+                    }
+                }
+            }
+            .padding(4)
+            .background(.black.opacity(0.35), in: Capsule())
+            Text("sec")
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.8))
+                .shadow(radius: 4)
         }
     }
 
@@ -355,23 +434,57 @@ struct SessionView: View {
     }
 
     private var calibrationBadge: some View {
-        let cal = Calibration.load()
-        return Label(cal.isCalibrated ? "Calibrated" : "Not calibrated",
-                     systemImage: cal.isCalibrated ? "checkmark.circle.fill" : "exclamationmark.circle")
+        Label(isCalibrated ? "Calibrated" : "Not calibrated",
+              systemImage: isCalibrated ? "checkmark.circle.fill" : "exclamationmark.circle")
             .font(.caption)
-            .foregroundStyle(cal.isCalibrated ? .green : .orange)
+            .foregroundStyle(isCalibrated ? .green : .orange)
     }
 
     // MARK: Flow
 
+    /// Recording unlocks only once the ball has been detected (that sets the
+    /// px/m scale) and the camera is live.
+    private var canRecord: Bool {
+        camera.isAuthorized && camera.isSessionRunning && isCalibrated
+    }
+
+    /// One-tap calibration from the Session screen: grab a frame, find the
+    /// ball, derive the px/m scale from its known diameter, save immediately.
+    private func detectBall() {
+        guard camera.isSessionRunning else { return }
+        isDetecting = true
+        detectMessage = nil
+        camera.captureSingleFrame { buffer in
+            let diameter = TrackingEngine.detectBallDiameter(in: buffer)
+            DispatchQueue.main.async {
+                self.isDetecting = false
+                guard let d = diameter, d > 6, d < 400 else {
+                    self.detectMessage = "No ball found — center a clean white ball in good light."
+                    return
+                }
+                var cal = Calibration.load()
+                cal.ballDiameterPx = d
+                cal.pixelsPerMeter = d / Calibration.golfBallDiameterMeters
+                cal.isCalibrated = true
+                cal.save()
+                self.isCalibrated = true
+                self.detectMessage = String(
+                    format: "Ball detected: %.0f px → %.0f px/m ✓",
+                    d, cal.pixelsPerMeter
+                )
+            }
+        }
+    }
+
     private func startShot() {
         errorMessage = nil
+        detectMessage = nil
         savedConfirmation = false
         metrics = nil
         tracerImage = nil
         phase = .countdown
         Task {
-            for i in [3, 2, 1] {
+            for i in stride(from: countdownSeconds, through: 1, by: -1) {
                 await MainActor.run { countdownValue = i }
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
             }
@@ -443,6 +556,7 @@ struct SessionView: View {
         metrics = nil
         tracerImage = nil
         errorMessage = nil
+        detectMessage = nil
         savedConfirmation = false
         camera.unlockFocusAndExposure()
     }
@@ -518,3 +632,4 @@ enum TracerRenderer {
         return UIImage(cgImage: cg)
     }
 }
+
