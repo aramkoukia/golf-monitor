@@ -23,6 +23,7 @@ enum MetricsError: Error, LocalizedError {
     case noBallFound
     case insufficientBallTrack
     case invalidCalibration
+    case upsideDownTrack
 
     var errorDescription: String? {
         switch self {
@@ -31,7 +32,9 @@ enum MetricsError: Error, LocalizedError {
         case .insufficientBallTrack:
             return "The ball left the frame too quickly to measure. Move the phone back a little or widen the shot."
         case .invalidCalibration:
-            return "Calibration looks invalid. Please run the Setup tab's ball detection again."
+            return "Calibration looks invalid. Please run ball detection on the Session tab again."
+        case .upsideDownTrack:
+            return "The ball tracked downward, so this clip's frames are upside-down — likely a clip recorded before the camera orientation fix. Record a fresh clip; if a fresh clip does this too, that's a bug worth reporting."
         }
     }
 }
@@ -83,6 +86,13 @@ enum MetricsCalculator {
         let speedMps = hypot(vx, vy)
         let launchAngle = atan2(vy, vx) * 180.0 / Double.pi
         let ballSpeedMph = speedMps * 2.23694
+
+        // A real shot leaves the clubface going up (or level, if topped).
+        // A clearly negative launch means the tracked frames are upside-
+        // down relative to the math — e.g. a clip recorded before the
+        // camera-orientation fix. Refuse rather than report the fake
+        // zeros the flight model would produce from a clamped launch.
+        guard launchAngle > -3 else { throw MetricsError.upsideDownTrack }
 
         // --- Clubhead speed from the last pre-impact samples ---
         var clubSpeedMph = 0.0

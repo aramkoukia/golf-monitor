@@ -18,10 +18,39 @@ struct ShotHistoryView: View {
         return df
     }()
 
+    private let dayFormatter: DateFormatter = {
+        let df = DateFormatter()
+        df.dateFormat = "EEEE, MMM d, yyyy"
+        return df
+    }()
+
+    /// Shots grouped by calendar day, newest day first — the Photos
+    /// "Days" arrangement. Shots within a day are newest first too.
+    private func dayGroups(_ list: [Shot]) -> [DayGroup] {
+        let cal = Calendar.current
+        let grouped = Dictionary(grouping: list) { cal.startOfDay(for: $0.date) }
+        return grouped
+            .map { DayGroup(day: $0.key, shots: $0.value.sorted { $0.date > $1.date }) }
+            .sorted { $0.day > $1.day }
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 clubFilterBar
+
+                Button {
+                    showMetricGuide = true
+                } label: {
+                    Label("What these numbers mean", systemImage: "info.circle")
+                        .font(.subheadline)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+                .padding(.bottom, 6)
+                .sheet(isPresented: $showMetricGuide) {
+                    MetricGuideView()
+                }
 
                 if let club = filterClub {
                     averagesCard(for: club)
@@ -43,16 +72,25 @@ struct ShotHistoryView: View {
                     Spacer()
                 } else {
                     List {
-                        ForEach(list) { shot in
-                            shotRow(shot)
-                        }
-                        .onDelete { offsets in
-                            // Map filtered-list offsets back to the store.
-                            let ids = offsets.map { list[$0].id }
-                            for id in ids {
-                                if let idx = store.shots.firstIndex(where: { $0.id == id }) {
-                                    store.delete(at: IndexSet(integer: idx))
+                        ForEach(dayGroups(list)) { group in
+                            Section {
+                                ForEach(group.shots) { shot in
+                                    shotRow(shot)
                                 }
+                                .onDelete { offsets in
+                                    // Map section offsets back to the store.
+                                    let ids = offsets.map { group.shots[$0].id }
+                                    for id in ids {
+                                        if let idx = store.shots.firstIndex(where: { $0.id == id }) {
+                                            store.delete(at: IndexSet(integer: idx))
+                                        }
+                                    }
+                                }
+                            } header: {
+                                Text(dayFormatter.string(from: group.day))
+                                    .font(.headline)
+                                    .foregroundStyle(.primary)
+                                    .textCase(nil)
                             }
                         }
                     }
@@ -61,16 +99,6 @@ struct ShotHistoryView: View {
             }
             .navigationTitle("History")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        showMetricGuide = true
-                    } label: {
-                        Label("About the metrics", systemImage: "info.circle")
-                    }
-                    .sheet(isPresented: $showMetricGuide) {
-                        MetricGuideView()
-                    }
-                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         exportCSV()
@@ -126,17 +154,40 @@ struct ShotHistoryView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("\(club.rawValue) · \(avg.count) shot\(avg.count == 1 ? "" : "s") avg")
                         .font(.headline)
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())],
-                              alignment: .leading, spacing: 8) {
-                        avgStat("Carry", formatDistance(yards: avg.carryYards, settings: settings))
-                        avgStat("Ball", formatSpeed(mph: avg.ballSpeedMph, settings: settings))
-                        avgStat("Club", formatSpeed(mph: avg.clubSpeedMph, settings: settings))
-                        avgStat("Smash", avg.smashFactor > 0 ? String(format: "%.2f", avg.smashFactor) : "—")
-                        avgStat("Launch", String(format: "%.0f°", avg.launchAngleDeg))
-                        avgStat("Offline", formatOffline(yards: avg.offlineYards, settings: settings))
-                        avgStat("Apex", formatDistance(yards: avg.apexYards, settings: settings))
-                        avgStat("Hang", String(format: "%.1fs", avg.hangTimeS))
-                        avgStat("Tempo", formatTempo(avg.tempoRatio))
+                    Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
+                        GridRow {
+                            avgStat("Carry", formatDistance(yards: avg.carryYards, settings: settings))
+                            avgStat("Ball", formatSpeed(mph: avg.ballSpeedMph, settings: settings))
+                            avgStat("Club", formatSpeed(mph: avg.clubSpeedMph, settings: settings))
+                        }
+                        GridRow {
+                            avgStat("Smash", avg.smashFactor > 0 ? String(format: "%.2f", avg.smashFactor) : "—")
+                            avgStat("Launch", String(format: "%.0f°", avg.launchAngleDeg))
+                            avgStat("Offline", formatOffline(yards: avg.offlineYards, settings: settings))
+                        }
+                        GridRow {
+                            avgStat("Apex", formatDistance(yards: avg.apexYards, settings: settings))
+                            avgStat("Hang", String(format: "%.1fs", avg.hangTimeS))
+                            avgStat("Tempo", formatTempo(avg.tempoRatio))
+                        }
+                    }
+                    if avg.count >= 2 {
+                        let bests = store.bests(for: club)
+                        Text("PERSONAL BEST")
+                            .font(.caption2.bold())
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 4)
+                        Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
+                            GridRow {
+                                avgStat("Carry", formatDistance(yards: bests.carryYards, settings: settings), tint: .green)
+                                avgStat("Ball", formatSpeed(mph: bests.ballSpeedMph, settings: settings), tint: .green)
+                                avgStat("Club", formatSpeed(mph: bests.clubSpeedMph, settings: settings), tint: .green)
+                            }
+                            GridRow {
+                                avgStat("Smash", bests.smashFactor > 0 ? String(format: "%.2f", bests.smashFactor) : "—", tint: .green)
+                                avgStat("Offline", formatBestOffline(bests.offlineAbsYards), tint: .green)
+                            }
+                        }
                     }
                 }
                 .padding()
@@ -148,54 +199,93 @@ struct ShotHistoryView: View {
         }
     }
 
-    private func avgStat(_ label: String, _ value: String) -> some View {
+    private func avgStat(_ label: String, _ value: String, tint: Color = .primary) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label.uppercased())
                 .font(.caption2.bold())
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
             Text(value)
                 .font(.headline)
                 .monospacedDigit()
+                .foregroundStyle(tint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: Rows
 
     private func shotRow(_ shot: Shot) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        let bests = store.bests(for: shot.club)
+        // A PB only means something against at least one other shot.
+        let multi = bests.count >= 2
+        return VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(shot.club.rawValue)
                     .font(.headline)
+                    .lineLimit(1)
                 Spacer()
                 Text(dateFormatter.string(from: shot.date))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())],
-                      alignment: .leading, spacing: 8) {
-                rowStat("Carry", formatDistance(yards: shot.carryYards, settings: settings))
-                rowStat("Ball", formatSpeed(mph: shot.ballSpeedMph, settings: settings))
-                rowStat("Club", formatSpeed(mph: shot.clubSpeedMph, settings: settings))
-                rowStat("Smash", shot.smashFactor > 0 ? String(format: "%.2f", shot.smashFactor) : "—")
-                rowStat("Launch", String(format: "%.0f°", shot.launchAngleDeg))
-                rowStat("Offline", formatOffline(yards: shot.offlineYards, settings: settings))
-                rowStat("Apex", formatDistance(yards: shot.apexYards, settings: settings))
-                rowStat("Hang", String(format: "~%.1fs", shot.hangTimeS))
-                rowStat("Tempo", formatTempo(shot.tempoRatio))
-                rowStat("Spin", shot.spinRpmEstimate.map { "\(Int($0)) rpm" } ?? "n/a")
+            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
+                GridRow {
+                    rowStat("Carry", formatDistance(yards: shot.carryYards, settings: settings),
+                            isBest: multi && shot.carryYards >= bests.carryYards)
+                    rowStat("Ball", formatSpeed(mph: shot.ballSpeedMph, settings: settings),
+                            isBest: multi && shot.ballSpeedMph >= bests.ballSpeedMph)
+                    rowStat("Club", formatSpeed(mph: shot.clubSpeedMph, settings: settings),
+                            isBest: multi && shot.clubSpeedMph > 0 && shot.clubSpeedMph >= bests.clubSpeedMph)
+                }
+                GridRow {
+                    rowStat("Smash", shot.smashFactor > 0 ? String(format: "%.2f", shot.smashFactor) : "—",
+                            isBest: multi && shot.smashFactor > 0 && shot.smashFactor >= bests.smashFactor)
+                    rowStat("Launch", String(format: "%.0f°", shot.launchAngleDeg))
+                    rowStat("Offline", formatOffline(yards: shot.offlineYards, settings: settings),
+                            isBest: multi && bests.offlineAbsYards > 0.05
+                                    && abs(shot.offlineYards) <= bests.offlineAbsYards)
+                }
+                GridRow {
+                    rowStat("Apex", formatDistance(yards: shot.apexYards, settings: settings))
+                    rowStat("Hang", String(format: "~%.1fs", shot.hangTimeS))
+                    rowStat("Tempo", formatTempo(shot.tempoRatio))
+                }
+                GridRow {
+                    rowStat("Spin", shot.spinRpmEstimate.map { "\(Int($0)) rpm" } ?? "n/a")
+                }
             }
         }
         .padding(.vertical, 4)
     }
 
-    private func rowStat(_ label: String, _ value: String) -> some View {
+    private func rowStat(_ label: String, _ value: String, isBest: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
-            Text(value)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Text(isBest ? value + " ★" : value)
                 .font(.subheadline.bold())
                 .monospacedDigit()
+                .foregroundStyle(isBest ? Color.green : Color.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Offline personal best is a distance from the line, with no side.
+    private func formatBestOffline(_ absYards: Double) -> String {
+        switch settings.distanceUnit {
+        case .yards: return String(format: "~%.0f yds", absYards)
+        case .meters: return String(format: "~%.0f m", absYards * 0.9144)
         }
     }
 
@@ -213,6 +303,15 @@ struct ShotHistoryView: View {
             // Best effort: nothing to show if the write fails.
         }
     }
+}
+
+// MARK: - Day grouping
+
+/// One calendar day's worth of shots, for the Photos-style grouped list.
+private struct DayGroup: Identifiable {
+    let day: Date
+    let shots: [Shot]
+    var id: Date { day }
 }
 
 // MARK: - Metric guide
@@ -277,6 +376,7 @@ struct MetricGuideView: View {
                 }
             }
             .navigationTitle("What the numbers mean")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }

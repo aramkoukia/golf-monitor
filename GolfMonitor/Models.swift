@@ -232,6 +232,32 @@ final class ShotStore: ObservableObject {
         )
     }
 
+    struct ClubBests {
+        var count: Int = 0
+        var carryYards: Double = 0
+        var ballSpeedMph: Double = 0
+        var clubSpeedMph: Double = 0
+        var smashFactor: Double = 0
+        /// Smallest absolute offline — closest to the target line.
+        var offlineAbsYards: Double = 0
+    }
+
+    /// Personal bests for a club, across all its saved shots. Only metrics
+    /// where "best" is unambiguous are included — launch, apex, hang time
+    /// and tempo have target zones, not a highest-wins direction.
+    func bests(for club: Club) -> ClubBests {
+        let list = shots(for: club)
+        guard !list.isEmpty else { return ClubBests() }
+        return ClubBests(
+            count: list.count,
+            carryYards: list.map(\.carryYards).max() ?? 0,
+            ballSpeedMph: list.map(\.ballSpeedMph).max() ?? 0,
+            clubSpeedMph: list.map(\.clubSpeedMph).max() ?? 0,
+            smashFactor: list.map(\.smashFactor).max() ?? 0,
+            offlineAbsYards: list.map { abs($0.offlineYards) }.min() ?? 0
+        )
+    }
+
     /// CSV for export via share sheet.
     func csvString() -> String {
         var lines = ["date,club,ball_speed_mph,club_speed_mph,launch_angle_deg,carry_yds,apex_yds,hang_time_s,smash_factor,tempo_ratio,offline_yds,notes"]
