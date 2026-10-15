@@ -102,6 +102,7 @@ struct SessionView: View {
     @State private var processingStatus = "Analyzing frames…"
     @State private var errorMessage: String?
     @State private var showShare = false
+    @State private var showMetricGuide = false
     @State private var savedConfirmation = false
     @State private var isDetecting = false
     @State private var detectMessage: String?
@@ -427,20 +428,30 @@ struct SessionView: View {
                     .padding(.top, 4)
 
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                        metricTile("Carry ~", formatDistance(yards: m.carryYards, settings: settings))
                         metricTile("Club Speed", formatSpeed(mph: m.clubSpeedMph, settings: settings))
                         metricTile("Smash Factor", m.smashFactor > 0 ? String(format: "%.2f", m.smashFactor) : "—")
                         metricTile("Launch Angle", String(format: "%.1f°", m.launchAngleDeg))
-                        metricTile("Carry ~", formatDistance(yards: m.carryYards, settings: settings))
+                        metricTile("Offline ~", formatOffline(yards: m.offlineYards, settings: settings))
                         metricTile("Apex ~", formatDistance(yards: m.apexYards, settings: settings))
                         metricTile("Hang Time", String(format: "~%.1fs", m.hangTimeS))
                         metricTile("Tempo", formatTempo(m.tempoRatio))
-                        metricTile("Offline ~", formatOffline(yards: m.offlineYards, settings: settings))
                     }
                     .padding(.horizontal)
 
                     Text("Spin: n/a — phone cameras can't measure spin")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+
+                    Button {
+                        showMetricGuide = true
+                    } label: {
+                        Label("What these numbers mean", systemImage: "info.circle")
+                            .font(.subheadline)
+                    }
+                    .sheet(isPresented: $showMetricGuide) {
+                        MetricGuideView()
+                    }
 
                     // Club selector
                     VStack(alignment: .leading, spacing: 8) {

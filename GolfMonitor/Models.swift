@@ -202,19 +202,33 @@ final class ShotStore: ObservableObject {
         var carryYards: Double = 0
         var launchAngleDeg: Double = 0
         var smashFactor: Double = 0
+        var apexYards: Double = 0
+        var hangTimeS: Double = 0
+        var tempoRatio: Double = 0
+        var offlineYards: Double = 0
     }
 
     func averages(for club: Club) -> ClubAverages {
         let list = shots(for: club)
         guard !list.isEmpty else { return ClubAverages() }
         let n = Double(list.count)
+        // Tempo 0 means unknown — average only the shots that have one.
+        let tempos = list.map(\.tempoRatio).filter { $0 > 0 }
+        // Same for club speed and smash: 0 means the swing wasn't tracked,
+        // and averaging those in would drag both toward a misleading 0.
+        let clubSpeeds = list.map(\.clubSpeedMph).filter { $0 > 0 }
+        let smashes = list.map(\.smashFactor).filter { $0 > 0 }
         return ClubAverages(
             count: list.count,
             ballSpeedMph: list.map(\.ballSpeedMph).reduce(0, +) / n,
-            clubSpeedMph: list.map(\.clubSpeedMph).reduce(0, +) / n,
+            clubSpeedMph: clubSpeeds.isEmpty ? 0 : clubSpeeds.reduce(0, +) / Double(clubSpeeds.count),
             carryYards: list.map(\.carryYards).reduce(0, +) / n,
             launchAngleDeg: list.map(\.launchAngleDeg).reduce(0, +) / n,
-            smashFactor: list.map(\.smashFactor).reduce(0, +) / n
+            smashFactor: smashes.isEmpty ? 0 : smashes.reduce(0, +) / Double(smashes.count),
+            apexYards: list.map(\.apexYards).reduce(0, +) / n,
+            hangTimeS: list.map(\.hangTimeS).reduce(0, +) / n,
+            tempoRatio: tempos.isEmpty ? 0 : tempos.reduce(0, +) / Double(tempos.count),
+            offlineYards: list.map(\.offlineYards).reduce(0, +) / n
         )
     }
 
