@@ -9,6 +9,7 @@ struct ShotHistoryView: View {
     @State private var filterClub: Club? = nil
     @State private var showShare = false
     @State private var showMetricGuide = false
+    @State private var compareShot: Shot? = nil
     @State private var csvURL: URL?
 
     private let dateFormatter: DateFormatter = {
@@ -95,6 +96,9 @@ struct ShotHistoryView: View {
                         }
                     }
                     .listStyle(.plain)
+                    .sheet(item: $compareShot) { shot in
+                        ProCompareView(shot: shot)
+                    }
                 }
             }
             .navigationTitle("History")
@@ -157,17 +161,17 @@ struct ShotHistoryView: View {
                     Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
                         GridRow {
                             avgStat("Carry", formatDistance(yards: avg.carryYards, settings: settings))
-                            avgStat("Ball", formatSpeed(mph: avg.ballSpeedMph, settings: settings))
-                            avgStat("Club", formatSpeed(mph: avg.clubSpeedMph, settings: settings))
+                            avgStat("Ball Speed", formatSpeed(mph: avg.ballSpeedMph, settings: settings))
+                            avgStat("Club Speed", formatSpeed(mph: avg.clubSpeedMph, settings: settings))
                         }
                         GridRow {
-                            avgStat("Smash", avg.smashFactor > 0 ? String(format: "%.2f", avg.smashFactor) : "—")
-                            avgStat("Launch", String(format: "%.0f°", avg.launchAngleDeg))
+                            avgStat("Smash Factor", avg.smashFactor > 0 ? String(format: "%.2f", avg.smashFactor) : "—")
+                            avgStat("Launch Angle", String(format: "%.0f°", avg.launchAngleDeg))
                             avgStat("Offline", formatOffline(yards: avg.offlineYards, settings: settings))
                         }
                         GridRow {
                             avgStat("Apex", formatDistance(yards: avg.apexYards, settings: settings))
-                            avgStat("Hang", String(format: "%.1fs", avg.hangTimeS))
+                            avgStat("Hang Time", String(format: "%.1fs", avg.hangTimeS))
                             avgStat("Tempo", formatTempo(avg.tempoRatio))
                         }
                     }
@@ -180,12 +184,30 @@ struct ShotHistoryView: View {
                         Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
                             GridRow {
                                 avgStat("Carry", formatDistance(yards: bests.carryYards, settings: settings), tint: .green)
-                                avgStat("Ball", formatSpeed(mph: bests.ballSpeedMph, settings: settings), tint: .green)
-                                avgStat("Club", formatSpeed(mph: bests.clubSpeedMph, settings: settings), tint: .green)
+                                avgStat("Ball Speed", formatSpeed(mph: bests.ballSpeedMph, settings: settings), tint: .green)
+                                avgStat("Club Speed", formatSpeed(mph: bests.clubSpeedMph, settings: settings), tint: .green)
                             }
                             GridRow {
-                                avgStat("Smash", bests.smashFactor > 0 ? String(format: "%.2f", bests.smashFactor) : "—", tint: .green)
+                                avgStat("Smash Factor", bests.smashFactor > 0 ? String(format: "%.2f", bests.smashFactor) : "—", tint: .green)
                                 avgStat("Offline", formatBestOffline(bests.offlineAbsYards), tint: .green)
+                            }
+                        }
+                    }
+                    if let pro = ProReference.stats(for: club) {
+                        Text("PGA TOUR AVERAGE")
+                            .font(.caption2.bold())
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 4)
+                        Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
+                            GridRow {
+                                avgStat("Carry", formatDistance(yards: pro.carryYards, settings: settings), tint: .blue)
+                                avgStat("Ball Speed", formatSpeed(mph: pro.ballSpeedMph, settings: settings), tint: .blue)
+                                avgStat("Club Speed", formatSpeed(mph: pro.clubSpeedMph, settings: settings), tint: .blue)
+                            }
+                            GridRow {
+                                avgStat("Smash Factor", String(format: "%.2f", pro.smashFactor), tint: .blue)
+                                avgStat("Launch Angle", String(format: "%.0f°", pro.launchAngleDeg), tint: .blue)
+                                avgStat("Apex", formatDistance(yards: pro.apexYards, settings: settings), tint: .blue)
                             }
                         }
                     }
@@ -238,27 +260,38 @@ struct ShotHistoryView: View {
                 GridRow {
                     rowStat("Carry", formatDistance(yards: shot.carryYards, settings: settings),
                             isBest: multi && shot.carryYards >= bests.carryYards)
-                    rowStat("Ball", formatSpeed(mph: shot.ballSpeedMph, settings: settings),
+                    rowStat("Ball Speed", formatSpeed(mph: shot.ballSpeedMph, settings: settings),
                             isBest: multi && shot.ballSpeedMph >= bests.ballSpeedMph)
-                    rowStat("Club", formatSpeed(mph: shot.clubSpeedMph, settings: settings),
+                    rowStat("Club Speed", formatSpeed(mph: shot.clubSpeedMph, settings: settings),
                             isBest: multi && shot.clubSpeedMph > 0 && shot.clubSpeedMph >= bests.clubSpeedMph)
                 }
                 GridRow {
-                    rowStat("Smash", shot.smashFactor > 0 ? String(format: "%.2f", shot.smashFactor) : "—",
+                    rowStat("Smash Factor", shot.smashFactor > 0 ? String(format: "%.2f", shot.smashFactor) : "—",
                             isBest: multi && shot.smashFactor > 0 && shot.smashFactor >= bests.smashFactor)
-                    rowStat("Launch", String(format: "%.0f°", shot.launchAngleDeg))
+                    rowStat("Launch Angle", String(format: "%.0f°", shot.launchAngleDeg))
                     rowStat("Offline", formatOffline(yards: shot.offlineYards, settings: settings),
                             isBest: multi && bests.offlineAbsYards > 0.05
                                     && abs(shot.offlineYards) <= bests.offlineAbsYards)
                 }
                 GridRow {
                     rowStat("Apex", formatDistance(yards: shot.apexYards, settings: settings))
-                    rowStat("Hang", String(format: "~%.1fs", shot.hangTimeS))
+                    rowStat("Hang Time", String(format: "~%.1fs", shot.hangTimeS))
                     rowStat("Tempo", formatTempo(shot.tempoRatio))
                 }
                 GridRow {
                     rowStat("Spin", shot.spinRpmEstimate.map { "\(Int($0)) rpm" } ?? "n/a")
                 }
+            }
+            HStack {
+                Spacer()
+                Button {
+                    compareShot = shot
+                } label: {
+                    Label("Compare vs Pro", systemImage: "chart.bar.xaxis")
+                        .font(.caption.bold())
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
             }
         }
         .padding(.vertical, 4)
@@ -383,5 +416,135 @@ struct MetricGuideView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Pro comparison
+
+/// One shot side-by-side with the PGA Tour average for its club:
+/// your value, the tour value, and the difference.
+struct ProCompareView: View {
+    let shot: Shot
+    @EnvironmentObject private var settings: SettingsStore
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Text("PGA Tour averages for the \(shot.club.rawValue), from TrackMan's published tour data. Context, not a target — these are the best players in the world with fitted gear.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                if let pro = ProReference.stats(for: shot.club) {
+                    Section {
+                        compareRow("Carry",
+                                   you: formatDistance(yards: shot.carryYards, settings: settings),
+                                   tour: formatDistance(yards: pro.carryYards, settings: settings),
+                                   delta: distanceDelta(shot.carryYards - pro.carryYards),
+                                   highlight: shot.carryYards >= pro.carryYards)
+                        compareRow("Ball Speed",
+                                   you: formatSpeed(mph: shot.ballSpeedMph, settings: settings),
+                                   tour: formatSpeed(mph: pro.ballSpeedMph, settings: settings),
+                                   delta: speedDelta(shot.ballSpeedMph - pro.ballSpeedMph),
+                                   highlight: shot.ballSpeedMph >= pro.ballSpeedMph)
+                        compareRow("Club Speed",
+                                   you: formatSpeed(mph: shot.clubSpeedMph, settings: settings),
+                                   tour: formatSpeed(mph: pro.clubSpeedMph, settings: settings),
+                                   delta: shot.clubSpeedMph > 0 ? speedDelta(shot.clubSpeedMph - pro.clubSpeedMph) : "—",
+                                   highlight: shot.clubSpeedMph > 0 && shot.clubSpeedMph >= pro.clubSpeedMph)
+                        compareRow("Smash Factor",
+                                   you: shot.smashFactor > 0 ? String(format: "%.2f", shot.smashFactor) : "—",
+                                   tour: String(format: "%.2f", pro.smashFactor),
+                                   delta: shot.smashFactor > 0 ? numberDelta(shot.smashFactor - pro.smashFactor) : "—",
+                                   highlight: shot.smashFactor > 0 && shot.smashFactor >= pro.smashFactor)
+                        compareRow("Launch Angle",
+                                   you: String(format: "%.1f°", shot.launchAngleDeg),
+                                   tour: String(format: "%.1f°", pro.launchAngleDeg),
+                                   delta: numberDelta(shot.launchAngleDeg - pro.launchAngleDeg, digits: 1, unit: "°"),
+                                   highlight: false)
+                        compareRow("Apex",
+                                   you: formatDistance(yards: shot.apexYards, settings: settings),
+                                   tour: formatDistance(yards: pro.apexYards, settings: settings),
+                                   delta: distanceDelta(shot.apexYards - pro.apexYards),
+                                   highlight: false)
+                    } header: {
+                        HStack {
+                            Text("Metric")
+                                .frame(width: 92, alignment: .leading)
+                            Spacer()
+                            Text("You")
+                                .frame(width: 72, alignment: .trailing)
+                            Text("Tour")
+                                .frame(width: 72, alignment: .trailing)
+                            Text("Diff")
+                                .frame(width: 76, alignment: .trailing)
+                        }
+                        .textCase(nil)
+                    }
+                    Section {
+                        Text("Launch and apex differences aren't scored — the right values depend on your speed and spin. Not compared: offline and tempo (no tour reference in the table), hang time (not published), and spin (the app can't measure it; the tour driver average is about 2,700 rpm).")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    Section {
+                        Text("No standard tour reference for the \(shot.club.rawValue) — pros play wedges at partial distances, so a single average wouldn't mean much.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .navigationTitle("You vs PGA Tour")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private func compareRow(_ name: String, you: String, tour: String, delta: String, highlight: Bool) -> some View {
+        HStack {
+            Text(name)
+                .font(.subheadline.bold())
+                .frame(width: 92, alignment: .leading)
+            Spacer()
+            Text(you)
+                .font(.subheadline.bold())
+                .monospacedDigit()
+                .frame(width: 72, alignment: .trailing)
+            Text(tour)
+                .font(.subheadline)
+                .monospacedDigit()
+                .frame(width: 72, alignment: .trailing)
+            Text(delta)
+                .font(.caption.bold())
+                .monospacedDigit()
+                .foregroundStyle(highlight ? Color.green : Color.secondary)
+                .frame(width: 76, alignment: .trailing)
+        }
+    }
+
+    private func speedDelta(_ dMph: Double) -> String {
+        let sign = dMph > 0 ? "+" : ""
+        switch settings.speedUnit {
+        case .mph: return String(format: "%@%.0f mph", sign, dMph)
+        case .kmh: return String(format: "%@%.0f km/h", sign, dMph * 1.60934)
+        }
+    }
+
+    private func distanceDelta(_ dYards: Double) -> String {
+        let sign = dYards > 0 ? "+" : ""
+        switch settings.distanceUnit {
+        case .yards: return String(format: "%@%.0f yds", sign, dYards)
+        case .meters: return String(format: "%@%.0f m", sign, dYards * 0.9144)
+        }
+    }
+
+    private func numberDelta(_ d: Double, digits: Int = 2, unit: String = "") -> String {
+        let sign = d > 0 ? "+" : ""
+        return String(format: "%@%.*f%@", sign, digits, d, unit)
     }
 }
