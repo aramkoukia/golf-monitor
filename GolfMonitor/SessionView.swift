@@ -108,7 +108,6 @@ struct SessionView: View {
     @State private var isDetecting = false
     @State private var detectMessage: String?
     @State private var detectedBall: DetectedBall?
-    @State private var detectionMethod: BallDetectionMethod?
     @State private var shotTask: Task<Void, Never>?
 
     private var clipDuration: TimeInterval { TimeInterval(clipSeconds) }
@@ -253,7 +252,7 @@ struct SessionView: View {
             }
 
             VStack(spacing: 2) {
-                Text("Calibration: \(detectionMethod?.displayName ?? "Core ML → brightness fallback")")
+                Text("Calibration: Core ML only")
                 Text("Shot tracking: brightness/blob (no AI)")
             }
             .font(.caption2)
@@ -567,14 +566,12 @@ struct SessionView: View {
         isDetecting = true
         detectMessage = nil
         detectedBall = nil
-        detectionMethod = nil
         camera.captureSingleFrame { buffer in
             let outcome = TrackingEngine.detectBall(in: buffer)
             DispatchQueue.main.async {
                 self.isDetecting = false
-                self.detectionMethod = outcome.method
                 guard let ball = outcome.ball else {
-                    self.detectMessage = "No ball found — center a clean white ball in good light."
+                    self.detectMessage = "Core ML detection failed: \(outcome.failureReason ?? "No ball detected.")"
                     return
                 }
                 guard let distance = self.ballDistanceMeters(ball) else {

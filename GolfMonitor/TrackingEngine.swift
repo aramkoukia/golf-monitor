@@ -38,21 +38,9 @@ struct DetectedBall {
     var frameHeight: Int
 }
 
-enum BallDetectionMethod {
-    case coreML
-    case brightnessBlob
-
-    var displayName: String {
-        switch self {
-        case .coreML: "Core ML"
-        case .brightnessBlob: "brightness/blob fallback"
-        }
-    }
-}
-
 struct BallDetectionOutcome {
     var ball: DetectedBall?
-    var method: BallDetectionMethod
+    var failureReason: String?
 }
 
 // MARK: - Tracking engine
@@ -191,70 +179,123 @@ final class TrackingEngine {
     // MARK: Ball diameter detection (calibration)
 
     /// Finds the ball in a single frame: its center, estimated diameter
-    /// (px), and the frame size the measurement is in. This first tries the
-    /// bundled on-device Core ML model, then falls back to the legacy
-    /// threshold/blob detector so the app still works without a custom model.
-    /// An empty frame returns nil instead of a hallucinated ball.
+    /// (px), using only the bundled on-device Core ML model.
     static func detectBall(in sampleBuffer: CMSampleBuffer) -> BallDetectionOutcome {
-        if let modelBall = Self.detectBallWithCoreML(in: sampleBuffer) {
-            return BallDetectionOutcome(ball: modelBall, method: .coreML)
+        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
+            return BallDetectionOutcome(ball: nil, failureReason: "Camera frame has no image buffer.")
         }
-        return BallDetectionOutcome(ball: Self.detectBallLegacy(in: sampleBuffer), method: .brightnessBlob)
-    }
+        guard let model = Self.loadBundledBallModel() else {
+            return BallDetectionOutcome(
+                ball: nil,
+                failureReason: "No bundled Core ML model could be loaded. Verify the model is included in the app target."
+            )
+        }
 
-    /// Uses a bundled on-device Core ML model if it exists in the app bundle.
-    /// This is a true local iPhone-only path with no server.
-    private static func detectBallWithCoreML(in sampleBuffer: CMSampleBuffer) -> DetectedBall? {
-        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return nil }
-        guard let model = Self.loadBundledBallModel() else { return nil }
-        guard let visionModel = try? VNCoreMLModel(for: model) else { return nil }
+        let visionModel: VNCoreMLModel
+        do {
+            visionModel = try VNCoreMLModel(for: model)
+        } catch {
+            return BallDetectionOutcome(
+                ball: nil,
+                failureReason: "The bundled model can't be used as a Vision object detector: \(error.localizedDescription)"
+            )
+        }
 
         let requestHandler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .up, options: [:])
         let sem = DispatchSemaphore(value: 0)
         var detected: DetectedBall?
+        var failureReason: String?
+        let inputDescription = model.modelDescription.inputDescriptionsByName.values.first
+        let inputWidth = inputDescription?.imageConstraint?.pixelsWide ?? 640
+        let inputHeight = inputDescription?.imageConstraint?.pixelsHigh ?? 640
+
+        let request = VNCoreMLRequest(model: visionModel) { request, error in
+            defer { sem.signal() }
+            if let error {
+                failureReason = "Core ML inference failed: \(error.localizedDescription)"
+                return
+            }
+            guard let featureObservations = request.results as? [VNCoreMLFeatureValueObservation],
+                  let output = featureObservations.lazy
+                    .compactMap({ $0.featureValue.multiArrayValue })
+                    .first
+            else {
+                let resultTypes = request.results?.map { String(describing: type(of: $0)) } ?? []
+                failureReason = "Core ML returned no multi-array detection tensor. Outputs: \(resultTypes.joined(separator: ", "))."
+                return
+            }
+
+            // This bundled YOLOv8n exports raw COCO predictions as [1, 84, 8400]:
+            // four box coordinates followed by 80 class scores. COCO class 32 is
+            // "sports ball"; it is the closest class this generic model provides.
+            let shape = output.shape.map(\.intValue)
+            guard shape.count == 3, shape[0] == 1 else {
+                failureReason = "Unsupported YOLO output tensor shape: \(shape). Expected [1, 84, anchors] or [1, anchors, 84]."
+                return
+            }
+            let channelsFirst = shape[1] == 84
+            let channelsLast = shape[2] == 84
+            guard channelsFirst || channelsLast else {
+                failureReason = "Unsupported YOLO output tensor shape: \(shape). Expected 84 COCO values per anchor."
+                return
+            }
+
+            let anchorCount = channelsFirst ? shape[2] : shape[1]
+            let value: (Int, Int) -> Double = { channel, anchor in
+                let indices: [NSNumber] = channelsFirst
+                    ? [0, channel, anchor] as [NSNumber]
+                    : [0, anchor, channel] as [NSNumber]
+                return output[indices].doubleValue
+            }
+            let sportsBallChannel = 4 + 32
+            var bestAnchor: Int?
+            var bestConfidence = 0.25
+            for anchor in 0..<anchorCount {
+                let confidence = value(sportsBallChannel, anchor)
+                if confidence > bestConfidence {
+                    bestConfidence = confidence
+                    bestAnchor = anchor
+                }
+            }
+            guard let bestAnchor else {
+                failureReason = "Core ML ran, but YOLO found no COCO 'sports ball' above 0.25 confidence. This generic model is not trained specifically for golf balls."
+                return
+            }
+
+            let cx = value(0, bestAnchor)
+            let cy = value(1, bestAnchor)
+            let boxWidth = value(2, bestAnchor)
+            let boxHeight = value(3, bestAnchor)
+            let coordinatesAreNormalized = ([cx, cy, boxWidth, boxHeight].map(abs).max() ?? 0) <= 2
+            let scaleX = coordinatesAreNormalized ? Double(CVPixelBufferGetWidth(pixelBuffer)) : Double(CVPixelBufferGetWidth(pixelBuffer)) / Double(inputWidth)
+            let scaleY = coordinatesAreNormalized ? Double(CVPixelBufferGetHeight(pixelBuffer)) : Double(CVPixelBufferGetHeight(pixelBuffer)) / Double(inputHeight)
+            let center = CGPoint(x: cx * scaleX, y: cy * scaleY)
+            let diameter = max(boxWidth * scaleX, boxHeight * scaleY)
+            guard center.x.isFinite, center.y.isFinite, diameter.isFinite, diameter > 0 else {
+                failureReason = "YOLO returned an invalid sports-ball bounding box."
+                return
+            }
+
+            let width = CVPixelBufferGetWidth(pixelBuffer)
+            let height = CVPixelBufferGetHeight(pixelBuffer)
+            detected = DetectedBall(center: center,
+                                    diameter: diameter,
+                                    frameWidth: width,
+                                    frameHeight: height)
+        }
+        request.imageCropAndScaleOption = .scaleFill
 
         do {
-            let request = VNCoreMLRequest(model: visionModel) { request, error in
-                defer { sem.signal() }
-                guard error == nil,
-                      let observations = request.results as? [VNRecognizedObjectObservation],
-                      !observations.isEmpty else {
-                    detected = nil
-                    return
-                }
-
-                let width = CVPixelBufferGetWidth(pixelBuffer)
-                let height = CVPixelBufferGetHeight(pixelBuffer)
-                let best = observations
-                    .filter { $0.boundingBox.width > 0.02 && $0.boundingBox.height > 0.02 }
-                    .max { lhs, rhs in lhs.confidence < rhs.confidence }
-
-                guard let obs = best else {
-                    detected = nil
-                    return
-                }
-
-                let rect = VNImageRectForNormalizedRect(obs.boundingBox, width, height)
-                let center = CGPoint(x: rect.midX, y: rect.midY)
-                let diameter = max(rect.width, rect.height)
-                guard diameter > 0 else {
-                    detected = nil
-                    return
-                }
-
-                detected = DetectedBall(center: center,
-                                        diameter: diameter,
-                                        frameWidth: width,
-                                        frameHeight: height)
-            }
-            request.imageCropAndScaleOption = .scaleFill
             try requestHandler.perform([request])
         } catch {
-            return nil
+            return BallDetectionOutcome(
+                ball: nil,
+                failureReason: "Vision couldn't run the Core ML model: \(error.localizedDescription)"
+            )
         }
 
         sem.wait()
-        return detected
+        return BallDetectionOutcome(ball: detected, failureReason: failureReason)
     }
 
     /// Loads the first local Core ML model that looks like a ball detector.
@@ -267,6 +308,7 @@ final class TrackingEngine {
             "GolfBallDetection",
             "GolfBallModel",
             "yolov8n",
+            "yolov8n 2",
             "yolov8n_coreml",
             "yolov8n-pose",
             "yolov8n_pose_coreml",
@@ -300,97 +342,6 @@ final class TrackingEngine {
         }
 
         return nil
-    }
-
-    /// Legacy detection path kept for compatibility when no local model is present.
-    private static func detectBallLegacy(in sampleBuffer: CMSampleBuffer) -> DetectedBall? {
-        let engine = TrackingEngine()
-        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer),
-              let gray = GrayImage(from: pixelBuffer),
-              // Slightly lower threshold than tracking (205) so more of the
-              // ball's surface joins the blob — rounder, truer size.
-              let bright = gray.thresholded(at: 190)
-        else { return nil }
-        defer { gray.free(); bright.free() }
-
-        let w = Double(gray.width), h = Double(gray.height)
-        let center = CGPoint(x: w / 2, y: h / 2)
-
-        // Plausible ball size at any sane phone distance (~0.5–8 m).
-        // Referenced to the LONG side of the frame: that's rotation-
-        // invariant (the ball's pixel size doesn't change when the phone
-        // rotates — only the crop does), so the band means the same thing
-        // in portrait and landscape.
-        let ref = max(w, h)
-        let minDiameter = ref * 0.0035
-        let maxDiameter = ref * 0.06
-
-        let candidates = engine.scanBlobs(in: bright, roi: CGRect(x: 0, y: 0, width: w, height: h), minPixels: 12)
-            .compactMap { blob -> DetectedBall? in
-                let areaDiameter = 2.0 * sqrt(Double(blob.pixelCount) / Double.pi)
-                guard areaDiameter >= minDiameter, areaDiameter <= maxDiameter else { return nil }
-                // Round, by second moments (1.0 = circular).
-                guard blob.elongation <= 1.5 else { return nil }
-                // Local contrast: bright inside AND clearly brighter than
-                // the ring around it. Sky, walls, and lit concrete fail —
-                // their surroundings are just as bright.
-                let innerRect = blob.bbox.insetBy(dx: blob.bbox.width * 0.2, dy: blob.bbox.height * 0.2)
-                let inner = regionMean(gray, innerRect)
-                guard inner >= 140 else { return nil }
-                let ring = ringMean(gray, around: blob.bbox)
-                guard inner - ring >= 20 else { return nil }
-                // Diameter from area and bbox, trusting area more.
-                let bboxDiameter = (Double(blob.bbox.width) + Double(blob.bbox.height)) / 2.0
-                let diameter = areaDiameter * 0.7 + bboxDiameter * 0.3
-                return DetectedBall(center: blob.centroid, diameter: diameter,
-                                    frameWidth: gray.width, frameHeight: gray.height)
-            }
-            // Nearest to frame center wins among the survivors.
-            .sorted { hypot($0.center.x - center.x, $0.center.y - center.y)
-                      < hypot($1.center.x - center.x, $1.center.y - center.y) }
-        return candidates.first
-    }
-
-    /// Mean gray level inside a rect (sampled every 2nd pixel).
-    private static func regionMean(_ gray: GrayImage, _ rect: CGRect) -> Double {
-        let x0 = max(0, Int(rect.minX)), x1 = min(gray.width - 1, Int(rect.maxX))
-        let y0 = max(0, Int(rect.minY)), y1 = min(gray.height - 1, Int(rect.maxY))
-        guard x1 > x0, y1 > y0 else { return 0 }
-        var sum = 0.0, n = 0.0
-        var y = y0
-        while y <= y1 {
-            var x = x0
-            while x <= x1 {
-                sum += Double(gray.pixels[y * gray.width + x])
-                n += 1
-                x += 2
-            }
-            y += 2
-        }
-        return n > 0 ? sum / n : 0
-    }
-
-    /// Mean gray level in the frame just outside a rect: the rect grown by
-    /// 75% on each side, excluding the rect itself.
-    private static func ringMean(_ gray: GrayImage, around rect: CGRect) -> Double {
-        let outer = rect.insetBy(dx: -rect.width * 0.75, dy: -rect.height * 0.75)
-        let x0 = max(0, Int(outer.minX)), x1 = min(gray.width - 1, Int(outer.maxX))
-        let y0 = max(0, Int(outer.minY)), y1 = min(gray.height - 1, Int(outer.maxY))
-        guard x1 > x0, y1 > y0 else { return 0 }
-        var sum = 0.0, n = 0.0
-        var y = y0
-        while y <= y1 {
-            var x = x0
-            while x <= x1 {
-                if !rect.contains(CGPoint(x: x, y: y)) {
-                    sum += Double(gray.pixels[y * gray.width + x])
-                    n += 1
-                }
-                x += 2
-            }
-            y += 2
-        }
-        return n > 0 ? sum / n : 0
     }
 
     static func detectBallDiameter(in sampleBuffer: CMSampleBuffer) -> Double? {

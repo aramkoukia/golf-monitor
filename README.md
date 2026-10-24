@@ -131,16 +131,20 @@ GolfMonitor/
 - **Spin is n/a** by design; carry uses club-typical spin assumptions.
 - **No automatic swing detection** — you press Record and swing within the
   3-2-1 countdown; the clip is a fixed 2 s.
-- **Ball detection is brightness-based** — white balls in good light. No ML
-  model, no Vision contour request (vImage thresholding was more predictable
-  to get right without on-device tuning).
+- **Calibration uses the bundled YOLOv8n Core ML model only.** The app decodes
+  its raw COCO output tensor and looks for the "sports ball" class; this generic
+  model is not golf-ball-specific, so it may miss small golf balls. Failures are
+  shown instead of silently falling back to brightness detection.
+- **Shot tracking is still brightness/blob-based** across the recorded frames;
+  Core ML is not yet used to track the moving ball or calculate shot metrics.
 - **History is local JSON**, no cloud sync.
 - Left-handed golfers: ball direction is mirrored internally, so speeds and
   angles are still correct; the tracer just draws right-to-left.
 
 ## Ideas for v2
 
-- On-device Core ML ball detector (robust to range balls / bad light)
+- Train and integrate a golf-ball-specific Core ML detector, then use it for
+  ball tracking throughout the recorded clip
 - Down-the-line camera mode for club path, face angle, true offline
 - Audio-triggered capture (impact sound starts the 2 s buffer)
 - Marked-ball spin estimation with higher-frame-rate capture
