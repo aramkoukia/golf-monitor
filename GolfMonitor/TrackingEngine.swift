@@ -1,5 +1,7 @@
 import AVFoundation
 import CoreGraphics
+import CoreML
+import Vision
 
 // MARK: - Result types
 
@@ -172,11 +174,116 @@ final class TrackingEngine {
     // MARK: Ball diameter detection (calibration)
 
     /// Finds the ball in a single frame: its center, estimated diameter
-    /// (px), and the frame size the measurement is in. Shape is judged from
-    /// second moments (the grid-snapped bbox is too coarse at ball sizes),
-    /// and local contrast does the heavy lifting against bright clutter.
+    /// (px), and the frame size the measurement is in. This first tries the
+    /// bundled on-device Core ML model, then falls back to the legacy
+    /// threshold/blob detector so the app still works without a custom model.
     /// An empty frame returns nil instead of a hallucinated ball.
     static func detectBall(in sampleBuffer: CMSampleBuffer) -> DetectedBall? {
+        if let modelBall = Self.detectBallWithCoreML(in: sampleBuffer) {
+            return modelBall
+        }
+        return Self.detectBallLegacy(in: sampleBuffer)
+    }
+
+    /// Uses a bundled on-device Core ML model if it exists in the app bundle.
+    /// This is a true local iPhone-only path with no server.
+    private static func detectBallWithCoreML(in sampleBuffer: CMSampleBuffer) -> DetectedBall? {
+        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return nil }
+        guard let model = Self.loadBundledBallModel() else { return nil }
+        guard let visionModel = try? VNCoreMLModel(for: model) else { return nil }
+
+        let requestHandler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .up, options: [:])
+        let sem = DispatchSemaphore(value: 0)
+        var detected: DetectedBall?
+
+        do {
+            let request = VNCoreMLRequest(model: visionModel) { request, error in
+                defer { sem.signal() }
+                guard error == nil,
+                      let observations = request.results as? [VNRecognizedObjectObservation],
+                      !observations.isEmpty else {
+                    detected = nil
+                    return
+                }
+
+                let width = CVPixelBufferGetWidth(pixelBuffer)
+                let height = CVPixelBufferGetHeight(pixelBuffer)
+                let best = observations
+                    .filter { $0.boundingBox.width > 0.02 && $0.boundingBox.height > 0.02 }
+                    .max { lhs, rhs in lhs.confidence < rhs.confidence }
+
+                guard let obs = best else {
+                    detected = nil
+                    return
+                }
+
+                let rect = VNImageRectForNormalizedRect(obs.boundingBox, width, height)
+                let center = CGPoint(x: rect.midX, y: rect.midY)
+                let diameter = max(rect.width, rect.height)
+                guard diameter > 0 else {
+                    detected = nil
+                    return
+                }
+
+                detected = DetectedBall(center: center,
+                                        diameter: diameter,
+                                        frameWidth: width,
+                                        frameHeight: height)
+            }
+            request.imageCropAndScaleOption = .scaleFill
+            try requestHandler.perform([request])
+        } catch {
+            return nil
+        }
+
+        sem.wait()
+        return detected
+    }
+
+    /// Loads the first local Core ML model that looks like a ball detector.
+    private static func loadBundledBallModel() -> MLModel? {
+        let candidates = [
+            "GolfBallDetector",
+            "GolfBall",
+            "BallDetector",
+            "BallDetection",
+            "GolfBallDetection",
+            "GolfBallModel",
+            "yolov8n",
+            "yolov8n_coreml",
+            "yolov8n-pose",
+            "yolov8n_pose_coreml",
+            "yolov8n-seg",
+            "yolov8n_seg_coreml",
+            "yolo11n",
+            "yolo11n-pose",
+            "yolo11n_pose_coreml"
+        ]
+
+        for name in candidates {
+            if let url = Bundle.main.url(forResource: name, withExtension: "mlmodelc") ??
+                Bundle.main.url(forResource: name, withExtension: "mlmodel") {
+                if let model = try? MLModel(contentsOf: url) {
+                    return model
+                }
+            }
+        }
+
+        let modelURLs = Bundle.main.urls(forResourcesWithExtension: "mlmodelc", subdirectory: nil) ?? []
+        for url in modelURLs {
+            if let model = try? MLModel(contentsOf: url) {
+                let name = url.deletingPathExtension().lastPathComponent.lowercased()
+                if name.contains("ball") || name.contains("golf") {
+                    return model
+                }
+            }
+        }
+
+        return nil
+    }
+
+    /// Legacy detection path kept for compatibility when no local model is present.
+    private static func detectBallLegacy(in sampleBuffer: CMSampleBuffer) -> DetectedBall? {
         let engine = TrackingEngine()
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer),
               let gray = GrayImage(from: pixelBuffer),
