@@ -89,6 +89,7 @@ struct SessionView: View {
     @EnvironmentObject private var settings: SettingsStore
 
     private enum Phase { case idle, countdown, recording, processing, result }
+    private static let acceptedBallDistanceMeters = 0.5...2.0
 
     @State private var phase: Phase = .idle
     @State private var countdownValue = 5
@@ -108,7 +109,7 @@ struct SessionView: View {
     @State private var detectMessage: String?
     @State private var detectedBall: DetectedBall?
     @State private var detectionMethod: BallDetectionMethod?
-    @State private var isCalibrated = Calibration.load().isCalibrated
+    @State private var shotTask: Task<Void, Never>?
 
     private var clipDuration: TimeInterval { TimeInterval(clipSeconds) }
 
@@ -132,7 +133,6 @@ struct SessionView: View {
             }
             .onAppear {
                 UIDevice.current.beginGeneratingDeviceOrientationNotifications()
-                isCalibrated = Calibration.load().isCalibrated
                 camera.requestPermission()
                 camera.updatePreviewOrientation()
             }
@@ -261,8 +261,8 @@ struct SessionView: View {
             .shadow(radius: 4)
             .padding(.bottom, 8)
 
-            if !isCalibrated {
-                Text("Detect the ball to unlock recording")
+            if detectedBall == nil {
+                Text("Detect an in-range ball (0.5–2 m) to enable recording")
                     .font(.caption)
                     .foregroundStyle(.white)
                     .padding(.horizontal, 12)
@@ -364,6 +364,8 @@ struct SessionView: View {
                 .foregroundStyle(.white)
                 .shadow(radius: 6)
             Spacer()
+            cancelShotButton
+                .padding(.bottom, 24)
         }
     }
 
@@ -383,7 +385,16 @@ struct SessionView: View {
                 .foregroundStyle(.white.opacity(0.85))
                 .shadow(radius: 6)
             Spacer()
+            cancelShotButton
+                .padding(.bottom, 24)
         }
+    }
+
+    private var cancelShotButton: some View {
+        Button("Cancel shot", systemImage: "xmark.circle.fill", action: cancelShot)
+            .font(.subheadline.bold())
+            .buttonStyle(.bordered)
+            .tint(.white)
     }
 
     private var processingContent: some View {
@@ -536,18 +547,17 @@ struct SessionView: View {
     }
 
     private var calibrationBadge: some View {
-        Label(isCalibrated ? "Calibrated" : "Not calibrated",
-              systemImage: isCalibrated ? "checkmark.circle.fill" : "exclamationmark.circle")
+        Label(detectedBall == nil ? "Detect ball" : "Ball ready",
+              systemImage: detectedBall == nil ? "scope" : "checkmark.circle.fill")
             .font(.caption)
-            .foregroundStyle(isCalibrated ? .green : .orange)
+            .foregroundStyle(detectedBall == nil ? .orange : .green)
     }
 
     // MARK: Flow
 
-    /// Recording unlocks only once the ball has been detected (that sets the
-    /// px/m scale) and the camera is live.
+    /// Recording unlocks only after a current, in-range ball detection.
     private var canRecord: Bool {
-        camera.isAuthorized && camera.isSessionRunning && isCalibrated
+        phase == .idle && camera.isAuthorized && camera.isSessionRunning && detectedBall != nil
     }
 
     /// One-tap calibration from the Session screen: grab a frame, find the
@@ -567,21 +577,27 @@ struct SessionView: View {
                     self.detectMessage = "No ball found — center a clean white ball in good light."
                     return
                 }
+                guard let distance = self.ballDistanceMeters(ball) else {
+                    self.detectMessage = "Could not estimate ball distance — check camera framing and try again."
+                    return
+                }
+                guard Self.acceptedBallDistanceMeters.contains(distance) else {
+                    self.detectMessage = String(
+                        format: "Ball appears ~%.1f m away — detection allowed only from 0.5–2.0 m.",
+                        distance
+                    )
+                    return
+                }
                 self.detectedBall = ball
                 var cal = Calibration.load()
                 cal.ballDiameterPx = ball.diameter
                 cal.pixelsPerMeter = ball.diameter / Calibration.golfBallDiameterMeters
                 cal.isCalibrated = true
                 cal.save()
-                self.isCalibrated = true
-                if let dist = self.ballDistanceMeters(ball) {
-                    self.detectMessage = String(
-                        format: "Ball detected — ~%.1f m (%.1f ft) from camera ✓",
-                        dist, dist * 3.28084
-                    )
-                } else {
-                    self.detectMessage = "Ball detected ✓"
-                }
+                self.detectMessage = String(
+                    format: "Ball detected — ~%.1f m (%.1f ft) from camera ✓",
+                    distance, distance * 3.28084
+                )
             }
         }
     }
@@ -593,32 +609,50 @@ struct SessionView: View {
     /// same in portrait and landscape.
     private func ballDistanceMeters(_ ball: DetectedBall) -> Double? {
         let fov = camera.fieldOfViewDegrees
-        guard fov > 1, ball.diameter > 0 else { return nil }
+        guard fov.isFinite, fov > 1, ball.diameter.isFinite, ball.diameter > 0 else { return nil }
         let longSide = Double(max(ball.frameWidth, ball.frameHeight))
         let focalPx = (longSide / 2) / tan(fov * .pi / 360)
-        return focalPx * Calibration.golfBallDiameterMeters / ball.diameter
+        let distance = focalPx * Calibration.golfBallDiameterMeters / ball.diameter
+        return distance.isFinite ? distance : nil
     }
 
     private func startShot() {
         errorMessage = nil
         detectMessage = nil
-        detectedBall = nil
         savedConfirmation = false
         metrics = nil
         tracerImage = nil
         phase = .countdown
-        Task {
+        shotTask = Task { @MainActor in
             for i in stride(from: countdownSeconds, through: 1, by: -1) {
-                await MainActor.run { countdownValue = i }
+                guard !Task.isCancelled else { return }
+                countdownValue = i
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
+                guard !Task.isCancelled else { return }
             }
-            await MainActor.run { phase = .recording }
-            let fps = await MainActor.run { camera.selectedFPS > 0 ? camera.selectedFPS : 240 }
+            guard !Task.isCancelled else { return }
+            phase = .recording
+            let fps = camera.selectedFPS > 0 ? camera.selectedFPS : 240
             camera.startRecording(duration: clipDuration) { url in
                 // Completion is delivered on the main queue.
+                guard self.phase == .recording else {
+                    if let url { try? FileManager.default.removeItem(at: url) }
+                    return
+                }
                 self.handleClip(url, fps: fps)
             }
         }
+    }
+
+    private func cancelShot() {
+        shotTask?.cancel()
+        shotTask = nil
+        camera.cancelRecording()
+        camera.unlockFocusAndExposure()
+        phase = .idle
+        metrics = nil
+        tracerImage = nil
+        errorMessage = nil
     }
 
     private func handleClip(_ url: URL?, fps: Double) {

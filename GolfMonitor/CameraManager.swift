@@ -309,6 +309,29 @@ final class CameraManager: NSObject, ObservableObject {
         }
     }
 
+    /// Aborts the current clip without delivering it to the shot processor.
+    func cancelRecording() {
+        videoQueue.async {
+            guard self.isRecording else { return }
+            self.isRecording = false
+            self.recordCompletion = nil
+            let url = self.recordURL
+            self.writer?.cancelWriting()
+            self.writer = nil
+            self.writerInput = nil
+            self.adaptor = nil
+            self.recordStartPTS = nil
+            self.recordURL = nil
+            if let url {
+                do {
+                    try FileManager.default.removeItem(at: url)
+                } catch {
+                    print("Failed to remove cancelled shot clip: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
     private func finishRecording(completion: ((URL?) -> Void)?) {
         guard isRecording else {
             if let completion { DispatchQueue.main.async { completion(nil) } }
