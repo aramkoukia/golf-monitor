@@ -38,6 +38,23 @@ struct DetectedBall {
     var frameHeight: Int
 }
 
+enum BallDetectionMethod {
+    case coreML
+    case brightnessBlob
+
+    var displayName: String {
+        switch self {
+        case .coreML: "Core ML"
+        case .brightnessBlob: "brightness/blob fallback"
+        }
+    }
+}
+
+struct BallDetectionOutcome {
+    var ball: DetectedBall?
+    var method: BallDetectionMethod
+}
+
 // MARK: - Tracking engine
 
 /// Frame-by-frame analysis of a recorded swing clip.
@@ -178,11 +195,11 @@ final class TrackingEngine {
     /// bundled on-device Core ML model, then falls back to the legacy
     /// threshold/blob detector so the app still works without a custom model.
     /// An empty frame returns nil instead of a hallucinated ball.
-    static func detectBall(in sampleBuffer: CMSampleBuffer) -> DetectedBall? {
+    static func detectBall(in sampleBuffer: CMSampleBuffer) -> BallDetectionOutcome {
         if let modelBall = Self.detectBallWithCoreML(in: sampleBuffer) {
-            return modelBall
+            return BallDetectionOutcome(ball: modelBall, method: .coreML)
         }
-        return Self.detectBallLegacy(in: sampleBuffer)
+        return BallDetectionOutcome(ball: Self.detectBallLegacy(in: sampleBuffer), method: .brightnessBlob)
     }
 
     /// Uses a bundled on-device Core ML model if it exists in the app bundle.
@@ -377,7 +394,7 @@ final class TrackingEngine {
     }
 
     static func detectBallDiameter(in sampleBuffer: CMSampleBuffer) -> Double? {
-        detectBall(in: sampleBuffer)?.diameter
+        detectBall(in: sampleBuffer).ball?.diameter
     }
 
     // MARK: Blob helpers

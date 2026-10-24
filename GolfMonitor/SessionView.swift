@@ -107,6 +107,7 @@ struct SessionView: View {
     @State private var isDetecting = false
     @State private var detectMessage: String?
     @State private var detectedBall: DetectedBall?
+    @State private var detectionMethod: BallDetectionMethod?
     @State private var isCalibrated = Calibration.load().isCalibrated
 
     private var clipDuration: TimeInterval { TimeInterval(clipSeconds) }
@@ -251,6 +252,15 @@ struct SessionView: View {
                     .padding(.bottom, 10)
             }
 
+            VStack(spacing: 2) {
+                Text("Calibration: \(detectionMethod?.displayName ?? "Core ML → brightness fallback")")
+                Text("Shot tracking: brightness/blob (no AI)")
+            }
+            .font(.caption2)
+            .foregroundStyle(.white.opacity(0.85))
+            .shadow(radius: 4)
+            .padding(.bottom, 8)
+
             if !isCalibrated {
                 Text("Detect the ball to unlock recording")
                     .font(.caption)
@@ -386,7 +396,7 @@ struct SessionView: View {
                 .font(.title3.bold())
                 .foregroundStyle(.white)
                 .shadow(radius: 6)
-            Text("Tracking the ball frame by frame")
+            Text("Brightness/blob tracking (no AI)")
                 .foregroundStyle(.white.opacity(0.85))
                 .shadow(radius: 6)
             Spacer()
@@ -414,6 +424,10 @@ struct SessionView: View {
                             .padding(8)
                         }
                 }
+
+                Text("Shot ball tracking: brightness/blob (no AI)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
                 if let m = metrics {
                     // Hero: ball speed
@@ -543,11 +557,13 @@ struct SessionView: View {
         isDetecting = true
         detectMessage = nil
         detectedBall = nil
+        detectionMethod = nil
         camera.captureSingleFrame { buffer in
-            let found = TrackingEngine.detectBall(in: buffer)
+            let outcome = TrackingEngine.detectBall(in: buffer)
             DispatchQueue.main.async {
                 self.isDetecting = false
-                guard let ball = found else {
+                self.detectionMethod = outcome.method
+                guard let ball = outcome.ball else {
                     self.detectMessage = "No ball found — center a clean white ball in good light."
                     return
                 }
