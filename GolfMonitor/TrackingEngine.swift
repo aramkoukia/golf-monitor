@@ -253,6 +253,7 @@ final class TrackingEngine {
             "yolov8n_coreml",
             "yolov8n-pose",
             "yolov8n_pose_coreml",
+            "yolov88n",
             "yolov8n-seg",
             "yolov8n_seg_coreml",
             "yolo11n",
@@ -262,18 +263,20 @@ final class TrackingEngine {
 
         for name in candidates {
             if let url = Bundle.main.url(forResource: name, withExtension: "mlmodelc") ??
-                Bundle.main.url(forResource: name, withExtension: "mlmodel") {
+                Bundle.main.url(forResource: name, withExtension: "mlmodel") ??
+                Bundle.main.url(forResource: name, withExtension: "mlpackage") {
                 if let model = try? MLModel(contentsOf: url) {
                     return model
                 }
             }
         }
 
-        let modelURLs = Bundle.main.urls(forResourcesWithExtension: "mlmodelc", subdirectory: nil) ?? []
+        let modelURLs = (Bundle.main.urls(forResourcesWithExtension: "mlmodelc", subdirectory: nil) ?? []) +
+            (Bundle.main.urls(forResourcesWithExtension: "mlpackage", subdirectory: nil) ?? [])
         for url in modelURLs {
             if let model = try? MLModel(contentsOf: url) {
                 let name = url.deletingPathExtension().lastPathComponent.lowercased()
-                if name.contains("ball") || name.contains("golf") {
+                if name.contains("ball") || name.contains("golf") || name.contains("yolov8n") {
                     return model
                 }
             }
