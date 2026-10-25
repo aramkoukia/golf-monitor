@@ -203,7 +203,16 @@ final class TrackingEngine {
         guard let model = Self.loadBundledBallModel() else {
             return BallDetectionOutcome(
                 ball: nil,
-                failureReason: "No bundled Core ML model could be loaded. Verify the model is included in the app target."
+                failureReason: "The trained GolfBallDetector model isn't bundled in the app."
+            )
+        }
+        let model: MLModel
+        do {
+            model = try MLModel(contentsOf: modelURL)
+        } catch {
+            return BallDetectionOutcome(
+                ball: nil,
+                failureReason: "Couldn't load the trained GolfBallDetector model: \(error.localizedDescription)"
             )
         }
 
@@ -241,21 +250,26 @@ final class TrackingEngine {
                 return
             }
 
-            // This bundled YOLOv8n exports raw COCO predictions as [1, 84, 8400]:
-            // four box coordinates followed by 80 class scores. COCO class 32 is
-            // "sports ball"; it is the closest class this generic model provides.
+            // The fine-tuned one-class YOLO model exports [1, 5, anchors]:
+            // center x/y, box width/height, and the golfball confidence.
             let shape = output.shape.map(\.intValue)
             guard shape.count == 3, shape[0] == 1 else {
-                failureReason = "Unsupported YOLO output tensor shape: \(shape). Expected [1, 84, anchors] or [1, anchors, 84]."
+                failureReason = "Unsupported GolfBallDetector tensor shape: \(shape). Expected [1, 5, anchors] or [1, anchors, 5]."
                 return
             }
-            let channelsFirst = shape[1] == 84
-            let channelsLast = shape[2] == 84
+            let channelsFirst = (5...84).contains(shape[1]) && shape[2] > 84
+            let channelsLast = (5...84).contains(shape[2]) && shape[1] > 84
             guard channelsFirst || channelsLast else {
-                failureReason = "Unsupported YOLO output tensor shape: \(shape). Expected 84 COCO values per anchor."
+                failureReason = "Unsupported GolfBallDetector tensor shape: \(shape). Expected 5 values per anchor."
                 return
             }
 
+            let featureCount = channelsFirst ? shape[1] : shape[2]
+            let classCount = featureCount - 4
+            guard classCount == 1 else {
+                failureReason = "GolfBallDetector must have one golf-ball class; its output contains \(classCount) classes."
+                return
+            }
             let anchorCount = channelsFirst ? shape[2] : shape[1]
             let value: (Int, Int) -> Double = { channel, anchor in
                 let indices: [NSNumber] = channelsFirst
@@ -263,18 +277,18 @@ final class TrackingEngine {
                     : [0, anchor, channel] as [NSNumber]
                 return output[indices].doubleValue
             }
-            let sportsBallChannel = 4 + 32
+            let golfBallChannel = 4
             var bestAnchor: Int?
             var bestConfidence = 0.25
             for anchor in 0..<anchorCount {
-                let confidence = value(sportsBallChannel, anchor)
+                let confidence = value(golfBallChannel, anchor)
                 if confidence > bestConfidence {
                     bestConfidence = confidence
                     bestAnchor = anchor
                 }
             }
             guard let bestAnchor else {
-                failureReason = "Core ML ran, but YOLO found no COCO 'sports ball' above 0.25 confidence. This generic model is not trained specifically for golf balls."
+                failureReason = "Core ML ran, but GolfBallDetector found no golf ball above 0.25 confidence."
                 return
             }
 
@@ -282,9 +296,8 @@ final class TrackingEngine {
             let cy = value(1, bestAnchor)
             let boxWidth = value(2, bestAnchor)
             let boxHeight = value(3, bestAnchor)
-            let coordinatesAreNormalized = ([cx, cy, boxWidth, boxHeight].map(abs).max() ?? 0) <= 2
-            let scaleX = coordinatesAreNormalized ? Double(CVPixelBufferGetWidth(pixelBuffer)) : Double(CVPixelBufferGetWidth(pixelBuffer)) / Double(inputWidth)
-            let scaleY = coordinatesAreNormalized ? Double(CVPixelBufferGetHeight(pixelBuffer)) : Double(CVPixelBufferGetHeight(pixelBuffer)) / Double(inputHeight)
+            let scaleX = Double(CVPixelBufferGetWidth(pixelBuffer)) / Double(inputWidth)
+            let scaleY = Double(CVPixelBufferGetHeight(pixelBuffer)) / Double(inputHeight)
             let center = CGPoint(x: cx * scaleX, y: cy * scaleY)
             let diameter = max(boxWidth * scaleX, boxHeight * scaleY)
             guard center.x.isFinite, center.y.isFinite, diameter.isFinite, diameter > 0 else {
