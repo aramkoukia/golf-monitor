@@ -46,7 +46,9 @@ support 240 fps at 720p), iOS 17+.
 ```
 
 - **Position:** tripod exactly 90° to your target line (pure side view),
-  2.5–4 m from the ball, lens roughly at ball height, phone in **landscape**.
+  phone in **landscape**, and outside the golfer's swing and ball paths. The
+  current detector accepts a phone-to-ball distance of **0.5–2.0 m**; don't
+  put the phone anywhere it could be struck to meet that range.
 - **Framing:** ball in the lower-center of frame with ~1–2 m of sky above it
   so the early ball flight stays in frame. Tap **Record Shot** once framed —
   the app locks focus/exposure so it doesn't hunt mid-swing.
@@ -56,15 +58,15 @@ support 240 fps at 720p), iOS 17+.
 - **Background:** a clean sky or net behind the ball flight path tracks far
   better than trees or other golfers moving behind it.
 
-## Calibration (Setup tab — do this once per session)
+## Ball detection (Session tab — repeat after moving the phone)
 
-1. Enter the measured phone-to-ball distance (meters or feet).
-2. Frame the ball in the center and tap **Detect ball in frame**. The app
-   finds the white ball, measures its diameter in pixels, and computes the
-   pixel→meter scale from the real ball diameter (42.67 mm).
-3. If detection looks wrong (bad light, wrong blob), use the **Fine-tune
-   scale** slider.
-4. Tap **Save setup**. Re-do this if you move the tripod.
+1. Keep the ball 0.5–2.0 m from the camera, framed clearly, with the phone
+   safely outside the golfer's swing and ball paths.
+2. Tap **Detect ball**. The app measures the ball diameter and computes the
+   pixel→meter scale from the real ball diameter (42.67 mm). A successful
+   detection saves calibration and unlocks **Record Shot**.
+3. If detection fails, improve lighting and framing, then try again. Re-detect
+   after moving the phone.
 
 ## How each metric is computed
 

@@ -38,6 +38,32 @@ struct DetectedBall {
     var diameter: Double
     var frameWidth: Int
     var frameHeight: Int
+    var confidence: Float = 0
+}
+
+extension DetectedBall {
+    static func centeredCandidates(in candidates: [DetectedBall]) -> [DetectedBall] {
+        candidates
+            .filter { candidate in
+                guard candidate.frameWidth > 0, candidate.frameHeight > 0,
+                      candidate.center.x.isFinite, candidate.center.y.isFinite else { return false }
+                let dx = abs(candidate.center.x / CGFloat(candidate.frameWidth) - 0.5)
+                let dy = abs(candidate.center.y / CGFloat(candidate.frameHeight) - 0.5)
+                return dx <= 0.25 && dy <= 0.25
+            }
+            .sorted { lhs, rhs in
+                let lhsDistance = normalizedCenterDistance(lhs)
+                let rhsDistance = normalizedCenterDistance(rhs)
+                if lhsDistance != rhsDistance { return lhsDistance < rhsDistance }
+                return lhs.confidence > rhs.confidence
+            }
+    }
+
+    private static func normalizedCenterDistance(_ candidate: DetectedBall) -> CGFloat {
+        let dx = candidate.center.x / CGFloat(candidate.frameWidth) - 0.5
+        let dy = candidate.center.y / CGFloat(candidate.frameHeight) - 0.5
+        return hypot(dx, dy)
+    }
 }
 
 struct BallDetectionOutcome {
@@ -251,9 +277,10 @@ final class TrackingEngine {
             let candidates = detections.map {
                 DetectedBall(center: $0.center, diameter: $0.diameter,
                              frameWidth: CVPixelBufferGetWidth(pixelBuffer),
-                             frameHeight: CVPixelBufferGetHeight(pixelBuffer))
+                             frameHeight: CVPixelBufferGetHeight(pixelBuffer),
+                             confidence: $0.confidence)
             }
-            if let ball = candidates.max(by: { $0.diameter < $1.diameter }) {
+            if let ball = candidates.max(by: { $0.confidence < $1.confidence }) {
                 return BallDetectionOutcome(
                     ball: ball,
                     failureReason: nil,

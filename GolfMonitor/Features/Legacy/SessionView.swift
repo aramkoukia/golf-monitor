@@ -589,15 +589,18 @@ struct SessionView: View {
                     return
                 }
                 let candidates = outcome.candidates.isEmpty ? [ball] : outcome.candidates
-                let measured = candidates.compactMap { candidate -> (ball: DetectedBall, distance: Double)? in
+                let centeredCandidates = DetectedBall.centeredCandidates(in: candidates)
+                guard !centeredCandidates.isEmpty else {
+                    self.detectMessage = "No ball detected near the center of the frame. Center the ball and try again."
+                    return
+                }
+                let measured = centeredCandidates.compactMap { candidate -> (ball: DetectedBall, distance: Double)? in
                     guard let distance = self.ballDistanceMeters(candidate) else { return nil }
                     return (candidate, distance)
                 }
-                // Equal-sized balls closer to the camera produce larger boxes.
                 let inRange = measured
                     .filter { Self.acceptedBallDistanceMeters.contains($0.distance) }
-                    .max { $0.ball.diameter < $1.ball.diameter }
-                guard let selected = inRange else {
+                guard let selected = inRange.first else {
                     guard let closest = measured.min(by: {
                         self.distanceOutsideAcceptedRange($0.distance)
                             < self.distanceOutsideAcceptedRange($1.distance)

@@ -59,18 +59,64 @@ final class MLPipelineTests: XCTestCase {
         )
     }
 
-    func testGolfDetectorFindsBallAtNativeResolution() throws {
+    func testBallSelectionPrefersCenteredDetectionOverHigherConfidenceDistractor() {
+        let centeredBall = DetectedBall(
+            center: CGPoint(x: 501, y: 499), diameter: 22,
+            frameWidth: 1000, frameHeight: 1000, confidence: 0.35
+        )
+        let distractor = DetectedBall(
+            center: CGPoint(x: 600, y: 510), diameter: 48,
+            frameWidth: 1000, frameHeight: 1000, confidence: 0.9
+        )
+        let outsideCenter = DetectedBall(
+            center: CGPoint(x: 850, y: 700), diameter: 60,
+            frameWidth: 1000, frameHeight: 1000, confidence: 0.99
+        )
+
+        let selected = DetectedBall.centeredCandidates(
+            in: [outsideCenter, distractor, centeredBall]
+        ).first
+
+        XCTAssertEqual(selected?.center, centeredBall.center)
+    }
+
+    func testBallSelectionRejectsCandidatesOutsideCenterFramingArea() {
+        let candidate = DetectedBall(
+            center: CGPoint(x: 800, y: 700), diameter: 40,
+            frameWidth: 1000, frameHeight: 1000, confidence: 0.99
+        )
+
+        XCTAssertTrue(DetectedBall.centeredCandidates(in: [candidate]).isEmpty)
+    }
+
+    func testGolfDetectorFindsBallWithNativeAndCalibrationTiles() throws {
         let detector = try XCTUnwrap(ObjectDetector(.golfDetector))
         let cg = try Self.frame("faceon_driver", at: 0.15)
-        let detections = detector.detectTiled(in: CIImage(cgImage: cg), confidence: 0.25)
+        let image = CIImage(cgImage: cg)
+        let trackingDetections = detector.detectTiled(in: image, confidence: 0.25)
         XCTAssertTrue(
-            detections.contains { $0.label.localizedCaseInsensitiveContains("ball") },
-            "No golf-ball detection in native-resolution tiles: \(detections)"
+            trackingDetections.contains {
+                $0.label.localizedCaseInsensitiveContains("ball")
+                    && hypot($0.center.x - 489, $0.center.y - 931) < 60
+            },
+            "Native-size model tiles did not find the fixture ball: \(trackingDetections)"
         )
+        let calibrationDetections = detector.detectTiled(in: image, tile: 640, confidence: 0.25)
         XCTAssertTrue(
-            detections.contains { hypot($0.center.x - 489, $0.center.y - 931) < 60 },
-            "Golf-ball boxes were not mapped back to source-frame coordinates: \(detections)"
+            calibrationDetections.contains {
+                $0.label.localizedCaseInsensitiveContains("ball")
+                    && hypot($0.center.x - 489, $0.center.y - 931) < 60
+            },
+            "Calibration tile boxes were not mapped to source-frame coordinates: \(calibrationDetections)"
         )
+        let bestBall = try XCTUnwrap(
+            calibrationDetections
+                .filter { $0.label.localizedCaseInsensitiveContains("ball") }
+                .max { $0.confidence < $1.confidence }
+        )
+        XCTAssertGreaterThanOrEqual(bestBall.confidence, 0.25)
+        XCTAssertLessThan(hypot(bestBall.center.x - 489, bestBall.center.y - 931), 60,
+                          "Highest-confidence ball candidate was not the fixture ball: \(bestBall)")
     }
 
     static func render(_ cg: CGImage, pose: PoseSample?, detections: [Detection], name: String) {

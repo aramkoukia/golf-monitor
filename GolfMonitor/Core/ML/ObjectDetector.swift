@@ -84,23 +84,25 @@ final class ObjectDetector {
 
     /// Runs `detect` over overlapping square tiles covering `region` at native
     /// resolution, so tiny balls aren't shrunk away by a full-frame resize.
-    func detectTiled(in image: CIImage, region: CGRect? = nil, tile: CGFloat = 640, overlap: CGFloat = 0.2,
+    func detectTiled(in image: CIImage, region: CGRect? = nil, tile: CGFloat? = nil, overlap: CGFloat = 0.2,
                      confidence: Float = 0.25, classes: Set<Int>? = nil) -> [Detection] {
         let full = CGRect(x: 0, y: 0, width: image.extent.width, height: image.extent.height)
         let area = (region ?? full).intersection(full)
         guard !area.isEmpty else { return [] }
-        let stride = tile * (1 - overlap)
+        let tileSize = tile ?? CGFloat(inputSide)
+        guard tileSize.isFinite, tileSize > 0, overlap.isFinite, (0..<1).contains(overlap) else { return [] }
+        let stride = tileSize * (1 - overlap)
         var all: [Detection] = []
         var y = area.minY
         repeat {
             var x = area.minX
             repeat {
-                let r = CGRect(x: x, y: y, width: tile, height: tile).intersection(area)
+                let r = CGRect(x: x, y: y, width: tileSize, height: tileSize).intersection(area)
                 all += detect(in: image, roi: r, confidence: confidence, classes: classes)
                 x += stride
-            } while x + tile * overlap < area.maxX
+            } while x + tileSize * overlap < area.maxX
             y += stride
-        } while y + tile * overlap < area.maxY
+        } while y + tileSize * overlap < area.maxY
         return ObjectDetector.nms(all, iou: 0.4)
     }
 
