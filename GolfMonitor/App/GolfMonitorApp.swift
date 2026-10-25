@@ -15,6 +15,29 @@ struct GolfMonitorApp: App {
                 .environmentObject(settings)
                 .environmentObject(router)
                 .preferredColorScheme(.dark)
+                .task { applyDebugLaunch() }
+        }
+    }
+
+    @MainActor
+    private func applyDebugLaunch() {
+        if DebugLaunch.flag("reset") { store.deleteAll() }
+        if DebugLaunch.flag("skipOnboarding") { settings.hasCompletedOnboarding = true }
+        if let tab = DebugLaunch.initialTab { router.tab = tab }
+        if DebugLaunch.flag("demo") {
+            DemoData.seedIfEmpty(store, settings: settings)
+        }
+        if DebugLaunch.value("studio") == "first" {
+            Task { @MainActor in
+                // Bundled clips are analyzed asynchronously; wait for one.
+                for _ in 0..<120 {
+                    if let shot = store.shots.first(where: \.hasMedia) {
+                        router.openStudio(shot.id)
+                        return
+                    }
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                }
+            }
         }
     }
 }

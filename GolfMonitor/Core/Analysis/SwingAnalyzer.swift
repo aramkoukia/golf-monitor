@@ -14,6 +14,13 @@ struct AnalysisRequest {
     var calibration: Calibration?
     /// Seconds from clip start where impact was heard/seen, if known.
     var impactTimeHint: Double? = nil
+    /// Phone roll (degrees, + = clockwise) from CoreMotion at capture, used to
+    /// correct "vertical" for tilt metrics and launch angle.
+    var deviceRollDeg: Double? = nil
+    /// Focal length in pixels of the capture format (intrinsics), if known.
+    var focalLengthPx: Double? = nil
+    /// Exposure duration used for capture (seconds), for blur-aware tracking.
+    var exposureDurationS: Double? = nil
 }
 
 struct AnalysisOutput {
@@ -77,5 +84,37 @@ final class SwingAnalyzer {
 enum BallLocator {
     static func locate(in sampleBuffer: CMSampleBuffer) -> BallDetectionOutcome {
         TrackingEngine.detectBall(in: sampleBuffer)
+    }
+}
+
+// MARK: - Shot factory
+
+extension Shot {
+    /// Builds a library Shot from an analysis result. Launch fields are 0
+    /// when the analyzer couldn't measure them (see AnalysisOutput.metricsError).
+    static func make(from output: AnalysisOutput, request: AnalysisRequest,
+                     source: ShotSource = .live, date: Date = Date()) -> Shot {
+        let m = output.metrics
+        let a = output.analysis
+        var shot = Shot(
+            date: date,
+            club: request.club,
+            ballSpeedMph: m?.ballSpeedMph ?? 0,
+            clubSpeedMph: m?.clubSpeedMph ?? 0,
+            launchAngleDeg: m?.launchAngleDeg ?? 0,
+            carryYards: m?.carryYards ?? 0,
+            apexYards: m?.apexYards ?? 0,
+            hangTimeS: m?.hangTimeS ?? 0,
+            smashFactor: m?.smashFactor ?? 0,
+            tempoRatio: a.metric("tempo.ratio")?.value ?? m?.tempoRatio ?? 0,
+            offlineYards: m?.offlineYards ?? 0,
+            cameraView: request.cameraView,
+            source: source
+        )
+        shot.backswingTimeS = a.metric("tempo.backswing")?.value
+        shot.downswingTimeS = a.metric("tempo.downswing")?.value
+        shot.metricSummary = Dictionary(a.metrics.map { ($0.id, $0.value) }, uniquingKeysWith: { first, _ in first })
+        shot.impactTimeInClip = a.impactTime
+        return shot
     }
 }

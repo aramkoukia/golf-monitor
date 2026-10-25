@@ -10,9 +10,16 @@ enum BundledModel: String, CaseIterable {
     case golferPose = "GolferPose"
     /// Generic COCO detector (v1 model) — last-resort "sports ball" fallback.
     case cocoDetector = "COCODetector"
+    /// SwingNet (GolfDB) per-frame encoder: 160×160 image → 1280-d feature.
+    case swingNetEncoder = "SwingNetEncoder"
+    /// SwingNet BiLSTM head: [1, 64, 1280] features → [1, 64, 9] event logits.
+    case swingNetSequence = "SwingNetSequence"
 
     var url: URL? {
+        // "<Name>Dev.mlmodelc" is a local, uncommitted development model
+        // (see .gitignore) used until the trained model is bundled.
         Bundle.main.url(forResource: rawValue, withExtension: "mlmodelc")
+            ?? Bundle.main.url(forResource: rawValue + "Dev", withExtension: "mlmodelc")
     }
 
     var isAvailable: Bool { url != nil }

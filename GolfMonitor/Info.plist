@@ -20,8 +20,14 @@
 	<string>1</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>GolfMonitor listens for the sound of impact so it can capture your swing hands-free. Audio is analyzed on your iPhone and never recorded or uploaded.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>GolfMonitor saves your swing videos and shot cards to your photo library when you choose to export them.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>GolfMonitor imports slow-motion swing videos you pick so they can be analyzed on your iPhone.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>GolfMonitor uses the camera to record your swing in slow motion and measure ball flight at the driving range.</string>
+	<string>GolfMonitor uses the camera to record your swing in slow motion and measure ball flight. Video is processed on your iPhone only.</string>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>

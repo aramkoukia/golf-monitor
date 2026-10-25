@@ -12,3 +12,6 @@ ml/datasets/
 ml/runs/
 __pycache__/
 .venv/
+
+# Local development models (not redistributable / not final)
+GolfMonitor/Resources/MLModels/*Dev.mlmodelc/

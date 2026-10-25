@@ -49,6 +49,8 @@ final class AppRouter: ObservableObject {
     @Published var studio: StudioRoute? = nil
     /// Practice game the Range screen should run next (PracticeGame id).
     @Published var pendingGameID: String? = nil
+    /// What the Range screen is doing (free practice or a game).
+    @Published var rangeContext: RangeSessionContext = .free
 
     func openStudio(_ shotID: UUID, compareWith other: UUID? = nil) {
         studio = StudioRoute(shotID: shotID, compareShotID: other)
@@ -57,5 +59,17 @@ final class AppRouter: ObservableObject {
     func startGame(_ gameID: String) {
         pendingGameID = gameID
         tab = .range
+    }
+
+    /// Hands a practice game to the Range screen and switches to it.
+    func startPractice(_ context: RangeSessionContext) {
+        rangeContext = context
+        pendingGameID = context.gameID
+        tab = .range
+    }
+
+    func endPractice() {
+        rangeContext = .free
+        pendingGameID = nil
     }
 }

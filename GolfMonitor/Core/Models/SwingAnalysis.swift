@@ -15,6 +15,14 @@ struct TrackPoint: Codable, Hashable {
     var confidence: Double? = nil
 }
 
+/// One sample of the modeled ball flight in METRES (side view):
+/// x = downrange distance, y = height, at time t after impact.
+struct FlightSample: Codable, Hashable {
+    var t: Double
+    var x: Double
+    var y: Double
+}
+
 // MARK: - Body pose
 
 /// The 19 joints Apple Vision's 2D body-pose request returns, in a fixed
@@ -191,7 +199,11 @@ struct SwingAnalysis: Codable, Hashable {
     var pixelsPerMeter: Double? = nil
 
     var ballTrack: [TrackPoint] = []
+    /// Ball position at address/impact (normalized), if found.
+    var ballAddress: TrackPoint? = nil
     var impactTime: Double? = nil
+    /// Modeled full flight (drag + lift) for the flight slab / tracer.
+    var flight: [FlightSample] = []
     var clubTrack: [TrackPoint] = []
     var poses: [PoseSample] = []
     var phases: [SwingPhaseMarker] = []

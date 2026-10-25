@@ -101,6 +101,11 @@ struct Shot: Codable, Identifiable, Hashable {
     var isFavorite: Bool = false
     var tags: [String] = []
     var practice: PracticeContext? = nil
+    /// Compact copy of the analysis' swing metrics (SwingMetric.id → value)
+    /// so Insights can chart trends without loading every analysis.json.
+    var metricSummary: [String: Double] = [:]
+    /// Seconds from clip start to impact, when known.
+    var impactTimeInClip: Double? = nil
 
     init(id: UUID = UUID(), date: Date = Date(), club: Club,
          ballSpeedMph: Double, clubSpeedMph: Double, launchAngleDeg: Double,
@@ -113,7 +118,8 @@ struct Shot: Codable, Identifiable, Hashable {
          downswingTimeS: Double? = nil, swingScore: Int? = nil,
          trackingQuality: Double? = nil, hasMedia: Bool = false,
          isFavorite: Bool = false, tags: [String] = [],
-         practice: PracticeContext? = nil) {
+         practice: PracticeContext? = nil, metricSummary: [String: Double] = [:],
+         impactTimeInClip: Double? = nil) {
         self.id = id
         self.date = date
         self.club = club
@@ -141,6 +147,8 @@ struct Shot: Codable, Identifiable, Hashable {
         self.isFavorite = isFavorite
         self.tags = tags
         self.practice = practice
+        self.metricSummary = metricSummary
+        self.impactTimeInClip = impactTimeInClip
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -148,7 +156,8 @@ struct Shot: Codable, Identifiable, Hashable {
              apexYards, hangTimeS, smashFactor, tempoRatio, offlineYards,
              spinRpmEstimate, notes, sessionID, cameraView, source, totalYards,
              descentAngleDeg, backswingTimeS, downswingTimeS, swingScore,
-             trackingQuality, hasMedia, isFavorite, tags, practice
+             trackingQuality, hasMedia, isFavorite, tags, practice, metricSummary,
+             impactTimeInClip
     }
 
     init(from decoder: Decoder) throws {
@@ -180,6 +189,8 @@ struct Shot: Codable, Identifiable, Hashable {
         isFavorite = try c.decodeIfPresent(Bool.self, forKey: .isFavorite) ?? false
         tags = try c.decodeIfPresent([String].self, forKey: .tags) ?? []
         practice = try c.decodeIfPresent(PracticeContext.self, forKey: .practice)
+        metricSummary = try c.decodeIfPresent([String: Double].self, forKey: .metricSummary) ?? [:]
+        impactTimeInClip = try c.decodeIfPresent(Double.self, forKey: .impactTimeInClip)
     }
 
     /// Whether launch numbers exist (down-the-line shots and swing-only clips

@@ -13,7 +13,7 @@ struct RootView: View {
                 }
             }
         }
-        .tint(Theme.Palette.volt)
+        .tint(Theme.Palette.plasma)
         .fullScreenCover(item: $router.studio) { route in
             SwingStudioView(route: route)
         }
