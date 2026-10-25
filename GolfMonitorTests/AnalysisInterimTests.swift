@@ -8,7 +8,9 @@ final class AnalysisInterimTests: XCTestCase {
         let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).mp4")
         try FileManager.default.copyItem(at: src, to: tmp)
         let out = try await SwingAnalyzer().analyze(AnalysisRequest(clipURL: tmp, club: .driver, cameraView: .faceOn,
-                                                                   handedness: .right, calibration: nil))
+                                                                   handedness: .right, calibration: nil,
+                                                                   captureFPS: 120))
+        XCTAssertEqual(out.analysis.fps, 120)
         print("POSES \(out.analysis.poses.count) PHASES \(out.analysis.phases.map { "\($0.phase.rawValue)@\(String(format: "%.2f", $0.t))" }) TEMPO \(out.analysis.metric("tempo.ratio")?.value ?? -1)")
         XCTAssertGreaterThan(out.analysis.poses.count, 30)
         XCTAssertEqual(out.analysis.phases.count, 8)

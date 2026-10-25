@@ -6,6 +6,7 @@ import UIKit
 struct ShotHistoryView: View {
     @EnvironmentObject private var store: ShotStore
     @EnvironmentObject private var settings: SettingsStore
+    @EnvironmentObject private var router: AppRouter
 
     @State private var filterClub: Club? = nil
     @State private var showShare = false
@@ -293,6 +294,16 @@ struct ShotHistoryView: View {
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
+                if shot.hasMedia {
+                    Button {
+                        router.openStudio(shot.id)
+                    } label: {
+                        Label("Analyze", systemImage: "play.rectangle")
+                            .font(.caption.bold())
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
             }
         }
         .padding(.vertical, 4)

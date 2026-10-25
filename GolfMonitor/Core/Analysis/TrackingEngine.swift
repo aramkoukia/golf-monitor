@@ -1,5 +1,6 @@
 import AVFoundation
 import CoreGraphics
+import CoreImage
 import CoreML
 import Vision
 
@@ -183,6 +184,21 @@ final class TrackingEngine {
     static func detectBall(in sampleBuffer: CMSampleBuffer) -> BallDetectionOutcome {
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
             return BallDetectionOutcome(ball: nil, failureReason: "Camera frame has no image buffer.")
+        }
+        let image = CIImage(cvPixelBuffer: pixelBuffer)
+        for which in [BundledModel.golfDetector, .cocoDetector] {
+            guard let detector = ObjectDetector(which) else { continue }
+            let classes: Set<Int>? = which == .cocoDetector ? [32] : nil
+            let ball = detector.detectTiled(in: image, tile: 640, confidence: 0.12, classes: classes)
+                .first { $0.label.localizedCaseInsensitiveContains("ball") }
+            if let ball {
+                return BallDetectionOutcome(
+                    ball: DetectedBall(center: ball.center, diameter: ball.diameter,
+                                       frameWidth: CVPixelBufferGetWidth(pixelBuffer),
+                                       frameHeight: CVPixelBufferGetHeight(pixelBuffer)),
+                    failureReason: nil
+                )
+            }
         }
         guard let model = Self.loadBundledBallModel() else {
             return BallDetectionOutcome(

@@ -21,6 +21,8 @@ struct AnalysisRequest {
     var focalLengthPx: Double? = nil
     /// Exposure duration used for capture (seconds), for blur-aware tracking.
     var exposureDurationS: Double? = nil
+    /// Actual capture rate. Nil keeps the analyzer's 240 fps default.
+    var captureFPS: Double? = nil
 }
 
 struct AnalysisOutput {
@@ -48,14 +50,21 @@ final class SwingAnalyzer {
                  progress: @escaping (Double, String) -> Void = { _, _ in }) async throws -> AnalysisOutput {
         try await Task.detached(priority: .userInitiated) {
             progress(0.1, "Tracking ball")
-            let fps = 240.0
+            let fps = request.captureFPS.flatMap { $0.isFinite && $0 > 0 ? $0 : nil } ?? 240.0
+            // TrackingEngine downsamples frames to half resolution before
+            // measuring points, so keep ball size and metric scale in that
+            // same coordinate space.
+            let trackingPixelsPerMeter = request.calibration.map { $0.pixelsPerMeter / 2 }
+            let trackingBallDiameter = request.calibration?.ballDiameterPx.map { $0 / 2 }
             let tracking = TrackingEngine().track(videoURL: request.clipURL, fps: fps,
-                                                  expectedBallDiameterPx: request.calibration?.ballDiameterPx)
+                                                  expectedBallDiameterPx: trackingBallDiameter)
             var metrics: ShotMetrics?
             var failure: String?
-            if let cal = request.calibration, request.cameraView == .faceOn {
+            if request.calibration != nil, request.cameraView == .faceOn {
                 do {
-                    metrics = try MetricsCalculator.calculate(tracking: tracking, pixelsPerMeter: cal.pixelsPerMeter, club: request.club)
+                    metrics = try MetricsCalculator.calculate(tracking: tracking,
+                                                              pixelsPerMeter: trackingPixelsPerMeter ?? 0,
+                                                              club: request.club)
                 } catch {
                     failure = error.localizedDescription
                 }

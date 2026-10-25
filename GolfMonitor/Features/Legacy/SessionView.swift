@@ -11,6 +11,7 @@ struct SessionView: View {
     @StateObject private var camera = CameraManager()
     @EnvironmentObject private var store: ShotStore
     @EnvironmentObject private var settings: SettingsStore
+    @EnvironmentObject private var router: AppRouter
 
     private enum Phase { case idle, countdown, recording, processing, result }
     private static let acceptedBallDistanceMeters = 0.5...2.0
@@ -23,6 +24,12 @@ struct SessionView: View {
         rawValue: UserDefaults.standard.string(forKey: "golfmonitor.lastClub") ?? ""
     ) ?? .driver
     @State private var metrics: ShotMetrics?
+    @State private var analysisOutput: AnalysisOutput?
+    @State private var analysisRequest: AnalysisRequest?
+    @State private var capturedClipURL: URL?
+    @State private var savedShotID: UUID?
+    @State private var analysisTask: Task<Void, Never>?
+    @State private var practiceFeedback: RangeFeedback?
     @State private var tracerImage: UIImage?
     @State private var processingStatus = "Analyzing frames…"
     @State private var errorMessage: String?
@@ -35,6 +42,11 @@ struct SessionView: View {
     @State private var shotTask: Task<Void, Never>?
 
     private var clipDuration: TimeInterval { TimeInterval(clipSeconds) }
+    private var ballDetectorStatus: String {
+        if BundledModel.golfDetector.isAvailable { return "Ball detection: GolfDetector · Core ML" }
+        if BundledModel.cocoDetector.isAvailable { return "Ball detection: COCO sports-ball · Core ML" }
+        return "Ball detection model unavailable"
+    }
 
     var body: some View {
         NavigationStack {
@@ -71,7 +83,12 @@ struct SessionView: View {
             .onChange(of: selectedClub) { _, club in
                 UserDefaults.standard.set(club.rawValue, forKey: "golfmonitor.lastClub")
             }
-            .onDisappear { camera.stopSession() }
+            .onDisappear {
+                camera.stopSession()
+                if let activeSessionID = store.activeSessionID {
+                    store.endSession(activeSessionID)
+                }
+            }
             .sheet(isPresented: $showShare, onDismiss: {
                 // The sheet can stop the session via onDisappear; restart it.
                 camera.requestPermission()
@@ -113,6 +130,48 @@ struct SessionView: View {
 
     private var idleControls: some View {
         VStack(spacing: 0) {
+            Text(ballDetectorStatus)
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.85))
+                .shadow(radius: 4)
+                .padding(.bottom, 8)
+
+            if !router.rangeContext.isFree, router.rangeContext.isFinished() {
+                VStack(spacing: 6) {
+                    Text("CHALLENGE COMPLETE")
+                        .font(.caption.bold())
+                    Text(router.rangeContext.subtitle)
+                        .font(.caption)
+                    Button("Finish challenge") {
+                        router.endPractice()
+                        if let activeSessionID = store.activeSessionID {
+                            store.endSession(activeSessionID)
+                        }
+                    }
+                    .font(.subheadline.bold())
+                    .buttonStyle(.borderedProminent)
+                }
+                .foregroundStyle(.white)
+                .padding(12)
+                .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
+                .padding(.bottom, 10)
+            } else if !router.rangeContext.isFree,
+                      let target = router.rangeContext.currentTarget() {
+                VStack(spacing: 3) {
+                    Text(router.rangeContext.title.uppercased())
+                        .font(.caption2.bold())
+                    Text(target.label)
+                        .font(.headline.monospacedDigit())
+                    Text(router.rangeContext.subtitle)
+                        .font(.caption)
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 12))
+                .padding(.bottom, 10)
+            }
+
             // Club picker — pick before the shot; the result card keeps a
             // synced copy for last-second corrections before saving.
             ScrollView(.horizontal, showsIndicators: false) {
@@ -176,8 +235,8 @@ struct SessionView: View {
             }
 
             VStack(spacing: 2) {
-                Text("Calibration: Core ML only")
-                Text("Shot tracking: brightness/blob (no AI)")
+                Text(ballDetectorStatus)
+                Text("Clip analysis: interim ball/club tracker + body pose")
             }
             .font(.caption2)
             .foregroundStyle(.white.opacity(0.85))
@@ -330,7 +389,7 @@ struct SessionView: View {
                 .font(.title3.bold())
                 .foregroundStyle(.white)
                 .shadow(radius: 6)
-            Text("Brightness/blob tracking (no AI)")
+            Text("Analyzing ball track and pose…")
                 .foregroundStyle(.white.opacity(0.85))
                 .shadow(radius: 6)
             Spacer()
@@ -359,7 +418,7 @@ struct SessionView: View {
                         }
                 }
 
-                Text("Shot ball tracking: brightness/blob (no AI)")
+                Text(analysisOutput?.analysis.pipeline ?? "Swing analysis")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -424,8 +483,29 @@ struct SessionView: View {
                     }
                     .padding(.horizontal)
 
+                }
+
+                if let err = errorMessage {
+                    Text(err)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                }
+
+                if let feedback = practiceFeedback {
+                    VStack(spacing: 4) {
+                        Text(feedback.headline).font(.headline)
+                        if !feedback.detail.isEmpty {
+                            Text(feedback.detail).font(.subheadline).foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+
+                if analysisOutput != nil {
                     Button {
-                        saveShot(metrics: m)
+                        saveShot()
                     } label: {
                         Text(savedConfirmation ? "Saved ✓" : "Save Shot")
                             .font(.title3.bold())
@@ -436,16 +516,18 @@ struct SessionView: View {
                     }
                     .disabled(savedConfirmation)
                     .padding(.horizontal)
-                } else if let err = errorMessage {
-                    VStack(spacing: 12) {
-                        Image(systemName: "exclamationmark.triangle")
-                            .font(.largeTitle)
-                            .foregroundStyle(.orange)
-                        Text(err)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal)
+                }
+
+                if savedConfirmation, let savedShotID {
+                    Button {
+                        router.openStudio(savedShotID)
+                    } label: {
+                        Label("Open in Swing Studio", systemImage: "play.rectangle")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding()
                     }
-                    .padding(.top, 60)
+                    .padding(.horizontal)
                 }
 
                 Button("Record another") { reset() }
@@ -480,7 +562,8 @@ struct SessionView: View {
 
     /// Recording unlocks only after a current, in-range ball detection.
     private var canRecord: Bool {
-        phase == .idle && camera.isAuthorized && camera.isSessionRunning && detectedBall != nil
+        phase == .idle && camera.isAuthorized && camera.isSessionRunning
+            && detectedBall != nil && !router.rangeContext.isFinished()
     }
 
     /// One-tap calibration from the Session screen: grab a frame, find the
@@ -542,8 +625,18 @@ struct SessionView: View {
         detectMessage = nil
         savedConfirmation = false
         metrics = nil
+        analysisOutput = nil
+        analysisRequest = nil
+        capturedClipURL = nil
+        savedShotID = nil
+        practiceFeedback = nil
         tracerImage = nil
         phase = .countdown
+        if store.activeSessionID == nil {
+            _ = store.startSession(cameraView: settings.cameraView,
+                                   gameID: router.rangeContext.gameID,
+                                   title: router.rangeContext.title)
+        }
         shotTask = Task { @MainActor in
             for i in stride(from: countdownSeconds, through: 1, by: -1) {
                 guard !Task.isCancelled else { return }
@@ -568,9 +661,18 @@ struct SessionView: View {
     private func cancelShot() {
         shotTask?.cancel()
         shotTask = nil
+        analysisTask?.cancel()
+        analysisTask = nil
         camera.cancelRecording()
         camera.unlockFocusAndExposure()
         phase = .idle
+        if let capturedClipURL {
+            try? FileManager.default.removeItem(at: capturedClipURL)
+        }
+        capturedClipURL = nil
+        analysisOutput = nil
+        analysisRequest = nil
+        practiceFeedback = nil
         metrics = nil
         tracerImage = nil
         errorMessage = nil
@@ -585,53 +687,78 @@ struct SessionView: View {
         phase = .processing
         processingStatus = "Analyzing frames…"
         let calibration = Calibration.load()
-        let ppm = calibration.pixelsPerMeter
-        let expectedDiameter = calibration.ballDiameterPx
-        let club = selectedClub
+        let request = AnalysisRequest(
+            clipURL: url,
+            club: selectedClub,
+            cameraView: settings.cameraView,
+            handedness: settings.handedness,
+            calibration: calibration.isCalibrated ? calibration : nil,
+            captureFPS: fps
+        )
+        analysisRequest = request
+        capturedClipURL = url
+        phase = .processing
+        processingStatus = "Tracking ball and reading pose…"
 
-        DispatchQueue.global(qos: .userInitiated).async {
-            let engine = TrackingEngine()
-            let tracking = engine.track(videoURL: url, fps: fps,
-                                        expectedBallDiameterPx: expectedDiameter)
-            var computed: ShotMetrics?
-            var failure: String?
+        analysisTask = Task {
             do {
-                computed = try MetricsCalculator.calculate(tracking: tracking,
-                                                           pixelsPerMeter: ppm,
-                                                           club: club)
-            } catch {
-                failure = error.localizedDescription
-            }
-            let tracer = TracerRenderer.makeTracerImage(videoURL: url, tracking: tracking)
-            DispatchQueue.main.async {
-                self.metrics = computed
-                self.tracerImage = tracer
-                self.errorMessage = failure
+                let output = try await SwingAnalyzer().analyze(request) { _, status in
+                    DispatchQueue.main.async { self.processingStatus = status }
+                }
+                guard !Task.isCancelled else { return }
+                self.analysisOutput = output
+                self.metrics = output.metrics
+                self.tracerImage = output.tracerImage
+                self.errorMessage = output.metricsError
                 self.phase = .result
+                self.analysisTask = nil
+            } catch {
+                guard !Task.isCancelled else { return }
+                self.errorMessage = "Swing analysis failed: \(error.localizedDescription)"
+                self.phase = .result
+                self.analysisTask = nil
             }
         }
     }
 
-    private func saveShot(metrics m: ShotMetrics) {
-        let shot = Shot(
-            club: selectedClub,
-            ballSpeedMph: m.ballSpeedMph,
-            clubSpeedMph: m.clubSpeedMph,
-            launchAngleDeg: m.launchAngleDeg,
-            carryYards: m.carryYards,
-            apexYards: m.apexYards,
-            hangTimeS: m.hangTimeS,
-            smashFactor: m.smashFactor,
-            tempoRatio: m.tempoRatio,
-            offlineYards: m.offlineYards,
-            notes: ""
-        )
-        store.addShot(shot)
+    private func saveShot() {
+        guard let output = analysisOutput,
+              var request = analysisRequest,
+              let clipURL = capturedClipURL else { return }
+        request.club = selectedClub
+        var shot = Shot.make(from: output, request: request)
+        if let target = router.rangeContext.currentTarget() {
+            shot.practice = PracticeContext(
+                gameID: router.rangeContext.gameID ?? "practice",
+                targetCarryYards: target.carryYards
+            )
+        }
+        let saved = store.addShot(shot, clipURL: clipURL,
+                                  analysis: output.analysis,
+                                  thumbnail: output.thumbnail)
+        savedShotID = saved.id
+        if let feedback = router.rangeContext.onShot(saved) {
+            practiceFeedback = feedback
+            if var savedShot = store.shot(id: saved.id) {
+                savedShot.practice?.points = feedback.points
+                store.update(savedShot)
+            }
+        }
         savedConfirmation = true
     }
 
     private func reset() {
+        analysisTask?.cancel()
+        analysisTask = nil
         phase = .idle
+        analysisOutput = nil
+        analysisRequest = nil
+        if let capturedClipURL,
+           FileManager.default.fileExists(atPath: capturedClipURL.path) {
+            try? FileManager.default.removeItem(at: capturedClipURL)
+        }
+        capturedClipURL = nil
+        savedShotID = nil
         metrics = nil
         tracerImage = nil
         errorMessage = nil
