@@ -112,11 +112,12 @@ tracker, body pose uses the available pose estimator, and swing phases use
 wrist-position heuristics. Its pipeline label is surfaced in the shot result.
 Capture rate is passed through from the camera.
 
-Calibration uses the new `ObjectDetector` first, preferring `GolfDetector` when
-bundled and otherwise trying the generic COCO sports-ball class. The current
-checkout only bundles `COCODetector` and `GolferPose`; it does not include
-`GolfDetector` or SwingNet. Thus the current ball model is generic, and swing
-event recognition is not yet using SwingNet.
+Calibration uses the new `ObjectDetector` first, preferring the trained
+`GolfBallDetector.mlpackage` from the `main` branch (registered as
+`GolfDetector`) and otherwise trying the generic COCO sports-ball class.
+`GolferPose.mlmodelc` is also bundled; SwingNet is not. Recorded-clip tracking
+still uses the interim v1 tracker, and swing-event recognition is not yet
+using SwingNet.
 
 Insights, Practice, and Swing Studio are usable first passes: Insights charts
 measured carry and club averages; Practice offers a five-shot 150-yard carry

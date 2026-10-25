@@ -190,7 +190,9 @@ final class TrackingEngine {
             guard let detector = ObjectDetector(which) else { continue }
             let classes: Set<Int>? = which == .cocoDetector ? [32] : nil
             let ball = detector.detectTiled(in: image, tile: 640, confidence: 0.12, classes: classes)
-                .first { $0.label.localizedCaseInsensitiveContains("ball") }
+                .first {
+                    which == .golfDetector || $0.label.localizedCaseInsensitiveContains("ball")
+                }
             if let ball {
                 return BallDetectionOutcome(
                     ball: DetectedBall(center: ball.center, diameter: ball.diameter,
@@ -203,16 +205,7 @@ final class TrackingEngine {
         guard let model = Self.loadBundledBallModel() else {
             return BallDetectionOutcome(
                 ball: nil,
-                failureReason: "The trained GolfBallDetector model isn't bundled in the app."
-            )
-        }
-        let model: MLModel
-        do {
-            model = try MLModel(contentsOf: modelURL)
-        } catch {
-            return BallDetectionOutcome(
-                ball: nil,
-                failureReason: "Couldn't load the trained GolfBallDetector model: \(error.localizedDescription)"
+                failureReason: "No bundled Core ML ball detector could be loaded."
             )
         }
 
@@ -250,24 +243,23 @@ final class TrackingEngine {
                 return
             }
 
-            // The fine-tuned one-class YOLO model exports [1, 5, anchors]:
-            // center x/y, box width/height, and the golfball confidence.
+            // The fine-tuned golf model uses 5 values per anchor; COCO uses 84.
             let shape = output.shape.map(\.intValue)
             guard shape.count == 3, shape[0] == 1 else {
-                failureReason = "Unsupported GolfBallDetector tensor shape: \(shape). Expected [1, 5, anchors] or [1, anchors, 5]."
+                failureReason = "Unsupported YOLO tensor shape: \(shape)."
                 return
             }
-            let channelsFirst = (5...84).contains(shape[1]) && shape[2] > 84
-            let channelsLast = (5...84).contains(shape[2]) && shape[1] > 84
+            let channelsFirst = [5, 84].contains(shape[1]) && shape[2] > shape[1]
+            let channelsLast = [5, 84].contains(shape[2]) && shape[1] > shape[2]
             guard channelsFirst || channelsLast else {
-                failureReason = "Unsupported GolfBallDetector tensor shape: \(shape). Expected 5 values per anchor."
+                failureReason = "Unsupported YOLO tensor shape: \(shape). Expected 5 or 84 values per anchor."
                 return
             }
 
             let featureCount = channelsFirst ? shape[1] : shape[2]
             let classCount = featureCount - 4
-            guard classCount == 1 else {
-                failureReason = "GolfBallDetector must have one golf-ball class; its output contains \(classCount) classes."
+            guard classCount == 1 || classCount == 80 else {
+                failureReason = "Unsupported YOLO class count: \(classCount). Expected one golf-ball class or 80 COCO classes."
                 return
             }
             let anchorCount = channelsFirst ? shape[2] : shape[1]
@@ -277,7 +269,7 @@ final class TrackingEngine {
                     : [0, anchor, channel] as [NSNumber]
                 return output[indices].doubleValue
             }
-            let golfBallChannel = 4
+            let golfBallChannel = classCount == 1 ? 4 : 4 + 32
             var bestAnchor: Int?
             var bestConfidence = 0.25
             for anchor in 0..<anchorCount {
@@ -288,7 +280,8 @@ final class TrackingEngine {
                 }
             }
             guard let bestAnchor else {
-                failureReason = "Core ML ran, but GolfBallDetector found no golf ball above 0.25 confidence."
+                let modelName = classCount == 1 ? "GolfBallDetector" : "COCO sports-ball"
+                failureReason = "Core ML ran, but \(modelName) found no ball above 0.25 confidence."
                 return
             }
 

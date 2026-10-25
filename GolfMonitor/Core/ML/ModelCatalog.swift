@@ -16,10 +16,12 @@ enum BundledModel: String, CaseIterable {
     case swingNetSequence = "SwingNetSequence"
 
     var url: URL? {
-        // "<Name>Dev.mlmodelc" is a local, uncommitted development model
-        // (see .gitignore) used until the trained model is bundled.
-        Bundle.main.url(forResource: rawValue, withExtension: "mlmodelc")
+        let appModelName = self == .golfDetector ? "GolfBallDetector" : rawValue
+        return Bundle.main.url(forResource: rawValue, withExtension: "mlmodelc")
             ?? Bundle.main.url(forResource: rawValue + "Dev", withExtension: "mlmodelc")
+            ?? Bundle.main.url(forResource: appModelName, withExtension: "mlmodelc")
+            ?? Bundle.main.url(forResource: appModelName, withExtension: "mlmodel")
+            ?? Bundle.main.url(forResource: appModelName, withExtension: "mlpackage")
     }
 
     var isAvailable: Bool { url != nil }
