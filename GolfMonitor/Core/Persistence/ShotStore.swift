@@ -29,6 +29,31 @@ final class ShotStore: ObservableObject {
         self.rootDirectory = rootDirectory
             ?? FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         load()
+        applyBackupPolicy()
+    }
+
+    /// UserDefaults key: include swing clips in iCloud/device backups.
+    /// Off by default — 240 fps clips are tens of MB each; shot data
+    /// (shots.json, sessions.json) is always backed up.
+    static let backupClipsKey = "golfmonitor.backupClips"
+
+    /// Marks ShotMedia/ excluded from (or included in) backups per the setting.
+    func applyBackupPolicy() {
+        try? FileManager.default.createDirectory(at: mediaRoot, withIntermediateDirectories: true)
+        var url = mediaRoot
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = !UserDefaults.standard.bool(forKey: Self.backupClipsKey)
+        try? url.setResourceValues(values)
+    }
+
+    /// Bytes used by clips, analyses and thumbnails.
+    func mediaBytes() -> Int64 {
+        guard let e = FileManager.default.enumerator(at: mediaRoot, includingPropertiesForKeys: [.fileSizeKey]) else { return 0 }
+        var total: Int64 = 0
+        for case let url as URL in e {
+            total += Int64((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+        }
+        return total
     }
 
     // MARK: Shots
