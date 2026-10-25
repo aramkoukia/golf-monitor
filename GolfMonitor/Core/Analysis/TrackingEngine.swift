@@ -43,6 +43,7 @@ struct DetectedBall {
 struct BallDetectionOutcome {
     var ball: DetectedBall?
     var failureReason: String?
+    var candidates: [DetectedBall] = []
 }
 
 // MARK: - Tracking engine
@@ -138,9 +139,10 @@ final class TrackingEngine {
                     return CGRect(x: pos.x * 2 - radius, y: pos.y * 2 - radius,
                                   width: radius * 2, height: radius * 2)
                 }
-                let candidates = golfDetector.detect(
-                    in: CIImage(cvPixelBuffer: pixelBuffer),
-                    roi: roi,
+                let image = CIImage(cvPixelBuffer: pixelBuffer)
+                let candidates = golfDetector.detectTiled(
+                    in: image,
+                    region: roi,
                     confidence: 0.15
                 ).filter { detection in
                     detection.label.localizedCaseInsensitiveContains("ball")
@@ -159,16 +161,7 @@ final class TrackingEngine {
                     selected = candidates.first
                 }
                 if let selected {
-                    let point = CGPoint(x: selected.center.x / 2, y: selected.center.y / 2)
-                    modelBallPosition = point
-                    if let previous = ballPos, !impactFound,
-                       hypot(point.x - previous.x, point.y - previous.y) > ballDiameterPx * 1.2 {
-                        impactFound = true
-                        result.impactBallIndex = result.ballPoints.count
-                    }
-                    ballPos = point
-                    result.ballFound = true
-                    result.golfDetectorAssisted = true
+                    modelBallPosition = CGPoint(x: selected.center.x / 2, y: selected.center.y / 2)
                 }
             }
 
@@ -204,7 +197,14 @@ final class TrackingEngine {
             }
 
             if let point = modelBallPosition, !ballPointRecorded {
+                if let previous = ballPos, !impactFound,
+                   hypot(point.x - previous.x, point.y - previous.y) > ballDiameterPx * 1.2 {
+                    impactFound = true
+                    result.impactBallIndex = result.ballPoints.count
+                }
                 ballPos = point
+                result.ballFound = true
+                result.golfDetectorAssisted = true
                 result.ballPoints.append(TrackedPoint(x: point.x, y: point.y, time: t))
             }
 
@@ -243,16 +243,21 @@ final class TrackingEngine {
         for which in [BundledModel.golfDetector, .cocoDetector] {
             guard let detector = ObjectDetector(which) else { continue }
             let classes: Set<Int>? = which == .cocoDetector ? [32] : nil
-            let ball = detector.detectTiled(in: image, tile: 640, confidence: 0.12, classes: classes)
-                .first {
-                    which == .golfDetector || $0.label.localizedCaseInsensitiveContains("ball")
+            let detections = detector.detectTiled(in: image, tile: 640, confidence: 0.25, classes: classes)
+                .filter { detection in
+                    detection.label.localizedCaseInsensitiveContains("ball")
+                        || (which == .golfDetector && detector.classNames.isEmpty && detection.classIndex == 0)
                 }
-            if let ball {
+            let candidates = detections.map {
+                DetectedBall(center: $0.center, diameter: $0.diameter,
+                             frameWidth: CVPixelBufferGetWidth(pixelBuffer),
+                             frameHeight: CVPixelBufferGetHeight(pixelBuffer))
+            }
+            if let ball = candidates.max(by: { $0.diameter < $1.diameter }) {
                 return BallDetectionOutcome(
-                    ball: DetectedBall(center: ball.center, diameter: ball.diameter,
-                                       frameWidth: CVPixelBufferGetWidth(pixelBuffer),
-                                       frameHeight: CVPixelBufferGetHeight(pixelBuffer)),
-                    failureReason: nil
+                    ball: ball,
+                    failureReason: nil,
+                    candidates: candidates
                 )
             }
         }

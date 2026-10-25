@@ -11,9 +11,10 @@ can't run in every environment; the source `.mlpackage`s live in
 The trained `GolfBallDetector.mlpackage` at the repository root is also added
 to the app target and compiled by Xcode; `ModelCatalog` loads it as the
 `GolfDetector` model. `SwingNetEncoder` and `SwingNetSequence` are not
-bundled, so the app does not run SwingNet. `GolfDetector` is used for
-calibration and periodic ball detection during recorded-clip analysis; the
-v1 blob tracker fills in frame-to-frame continuity and still tracks the club.
+bundled, so the app does not run SwingNet. `GolfDetector` uses native-resolution
+640px tiles for calibration and periodic ball detection during recorded-clip
+analysis; the v1 blob tracker fills in frame-to-frame continuity and still
+tracks the club.
 See `docs/V2_PLAN.md`.
 
 | Model | File | What it does | Base / licence |

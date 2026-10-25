@@ -59,6 +59,20 @@ final class MLPipelineTests: XCTestCase {
         )
     }
 
+    func testGolfDetectorFindsBallAtNativeResolution() throws {
+        let detector = try XCTUnwrap(ObjectDetector(.golfDetector))
+        let cg = try Self.frame("faceon_driver", at: 0.15)
+        let detections = detector.detectTiled(in: CIImage(cgImage: cg), confidence: 0.25)
+        XCTAssertTrue(
+            detections.contains { $0.label.localizedCaseInsensitiveContains("ball") },
+            "No golf-ball detection in native-resolution tiles: \(detections)"
+        )
+        XCTAssertTrue(
+            detections.contains { hypot($0.center.x - 489, $0.center.y - 931) < 60 },
+            "Golf-ball boxes were not mapped back to source-frame coordinates: \(detections)"
+        )
+    }
+
     static func render(_ cg: CGImage, pose: PoseSample?, detections: [Detection], name: String) {
         let size = CGSize(width: cg.width, height: cg.height)
         let img = UIGraphicsImageRenderer(size: size).image { ctx in

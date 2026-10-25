@@ -12,6 +12,7 @@ struct SessionView: View {
     @EnvironmentObject private var store: ShotStore
     @EnvironmentObject private var settings: SettingsStore
     @EnvironmentObject private var router: AppRouter
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     private enum Phase { case idle, countdown, recording, processing, result }
     private static let acceptedBallDistanceMeters = 0.5...2.0
@@ -42,6 +43,7 @@ struct SessionView: View {
     @State private var shotTask: Task<Void, Never>?
 
     private var clipDuration: TimeInterval { TimeInterval(clipSeconds) }
+    private var isCompactLayout: Bool { verticalSizeClass == .compact }
     private var ballDetectorStatus: String {
         if BundledModel.golfDetector.isAvailable { return "Ball detection: GolfDetector · Core ML" }
         if BundledModel.cocoDetector.isAvailable { return "Ball detection: COCO sports-ball · Core ML" }
@@ -130,11 +132,13 @@ struct SessionView: View {
 
     private var idleControls: some View {
         VStack(spacing: 0) {
-            Text(ballDetectorStatus)
-                .font(.caption2)
-                .foregroundStyle(.white.opacity(0.85))
-                .shadow(radius: 4)
-                .padding(.bottom, 8)
+            if !isCompactLayout {
+                Text(ballDetectorStatus)
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.85))
+                    .shadow(radius: 4)
+                    .padding(.bottom, 8)
+            }
 
             if !router.rangeContext.isFree, router.rangeContext.isFinished() {
                 VStack(spacing: 6) {
@@ -192,10 +196,10 @@ struct SessionView: View {
                 }
                 .padding(.horizontal)
             }
-            .padding(.top, 8)
+            .padding(.top, isCompactLayout ? 2 : 8)
 
             if !camera.isSessionRunning {
-                Spacer()
+                Spacer(minLength: isCompactLayout ? 4 : 0)
                 VStack(spacing: 12) {
                     Image(systemName: "camera.fill")
                         .font(.largeTitle)
@@ -222,28 +226,32 @@ struct SessionView: View {
                     .padding(.top, 8)
             }
 
-            Spacer()
+            Spacer(minLength: isCompactLayout ? 4 : 0)
 
             if let msg = detectMessage {
                 Text(msg)
                     .font(.caption)
+                    .lineLimit(isCompactLayout ? 1 : 2)
+                    .minimumScaleFactor(0.8)
                     .foregroundStyle(.white)
                     .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
+                    .padding(.vertical, isCompactLayout ? 3 : 6)
                     .background(.black.opacity(0.5), in: Capsule())
-                    .padding(.bottom, 10)
+                    .padding(.bottom, isCompactLayout ? 2 : 10)
             }
 
-            VStack(spacing: 2) {
-                Text(ballDetectorStatus)
-                Text("Clip analysis: GolfDetector (if available) + blob tracking + body pose")
+            if !isCompactLayout {
+                VStack(spacing: 2) {
+                    Text(ballDetectorStatus)
+                    Text("Clip analysis: GolfDetector (if available) + blob tracking + body pose")
+                }
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.85))
+                .shadow(radius: 4)
+                .padding(.bottom, 8)
             }
-            .font(.caption2)
-            .foregroundStyle(.white.opacity(0.85))
-            .shadow(radius: 4)
-            .padding(.bottom, 8)
 
-            if detectedBall == nil {
+            if detectedBall == nil && !isCompactLayout {
                 Text("Detect an in-range ball (0.5–2 m) to enable recording")
                     .font(.caption)
                     .foregroundStyle(.white)
@@ -253,13 +261,12 @@ struct SessionView: View {
                     .padding(.bottom, 10)
             }
 
-            durationChips(label: "Countdown", selection: $countdownSeconds)
-                .padding(.bottom, 8)
-            durationChips(label: "Clip", selection: $clipSeconds)
-                .padding(.bottom, 12)
+            durationChips(label: "Countdown", selection: $countdownSeconds, compact: isCompactLayout)
+                .padding(.bottom, isCompactLayout ? 2 : 8)
+            durationChips(label: "Clip", selection: $clipSeconds, compact: isCompactLayout)
+                .padding(.bottom, isCompactLayout ? 4 : 12)
 
-            // Detect + Record share one row — stacked, the pair pushed Record
-            // under the tab bar in landscape.
+            // Keep the primary actions in one row so both remain visible in landscape.
             HStack(spacing: 12) {
                 Button {
                     detectBall()
@@ -271,7 +278,7 @@ struct SessionView: View {
                     }
                     .foregroundStyle(.white)
                     .padding(.horizontal, 18)
-                    .padding(.vertical, 12)
+                    .padding(.vertical, isCompactLayout ? 8 : 12)
                     .background(.ultraThinMaterial, in: Capsule())
                     .shadow(color: .black.opacity(0.25), radius: 6, y: 3)
                 }
@@ -287,21 +294,21 @@ struct SessionView: View {
                             .font(.title3.bold())
                     }
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 26)
-                    .padding(.vertical, 13)
+                    .padding(.horizontal, isCompactLayout ? 18 : 26)
+                    .padding(.vertical, isCompactLayout ? 8 : 13)
                     .background(canRecord ? Color.accentColor : Color.gray,
                                 in: Capsule())
                     .shadow(color: .black.opacity(0.35), radius: 10, y: 4)
                 }
                 .disabled(!canRecord)
             }
-            .padding(.bottom, 18)
+            .padding(.bottom, isCompactLayout ? 6 : 18)
         }
     }
 
     /// iPhone-camera-style duration picker: a row of tappable pills
     /// (3/5/10/15 s) in a dark capsule — no dropdowns.
-    private func durationChips(label: String, selection: Binding<Int>) -> some View {
+    private func durationChips(label: String, selection: Binding<Int>, compact: Bool = false) -> some View {
         HStack(spacing: 8) {
             Text(label.uppercased())
                 .font(.caption2.bold())
@@ -309,7 +316,7 @@ struct SessionView: View {
                 .shadow(radius: 4)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
-                .frame(width: 80, alignment: .trailing)
+                .frame(width: compact ? 72 : 80, alignment: .trailing)
             HStack(spacing: 4) {
                 ForEach([3, 5, 10, 15], id: \.self) { sec in
                     Button {
@@ -317,7 +324,7 @@ struct SessionView: View {
                     } label: {
                         Text("\(sec)")
                             .font(.caption.bold())
-                            .frame(width: 32, height: 32)
+                            .frame(width: 30, height: compact ? 28 : 32)
                             .background(selection.wrappedValue == sec ? Color.white : Color.white.opacity(0.15), in: Circle())
                             .foregroundStyle(selection.wrappedValue == sec ? .black : .white)
                     }
@@ -581,21 +588,35 @@ struct SessionView: View {
                     self.detectMessage = "Core ML detection failed: \(outcome.failureReason ?? "No ball detected.")"
                     return
                 }
-                guard let distance = self.ballDistanceMeters(ball) else {
-                    self.detectMessage = "Could not estimate ball distance — check camera framing and try again."
-                    return
+                let candidates = outcome.candidates.isEmpty ? [ball] : outcome.candidates
+                let measured = candidates.compactMap { candidate -> (ball: DetectedBall, distance: Double)? in
+                    guard let distance = self.ballDistanceMeters(candidate) else { return nil }
+                    return (candidate, distance)
                 }
-                guard Self.acceptedBallDistanceMeters.contains(distance) else {
+                // Equal-sized balls closer to the camera produce larger boxes.
+                let inRange = measured
+                    .filter { Self.acceptedBallDistanceMeters.contains($0.distance) }
+                    .max { $0.ball.diameter < $1.ball.diameter }
+                guard let selected = inRange else {
+                    guard let closest = measured.min(by: {
+                        self.distanceOutsideAcceptedRange($0.distance)
+                            < self.distanceOutsideAcceptedRange($1.distance)
+                    }) else {
+                        self.detectMessage = "Could not estimate ball distance — check camera framing and try again."
+                        return
+                    }
                     self.detectMessage = String(
                         format: "Ball appears ~%.1f m away — detection allowed only from 0.5–2.0 m.",
-                        distance
+                        closest.distance
                     )
                     return
                 }
-                self.detectedBall = ball
+                let selectedBall = selected.ball
+                let distance = selected.distance
+                self.detectedBall = selectedBall
                 var cal = Calibration.load()
-                cal.ballDiameterPx = ball.diameter
-                cal.pixelsPerMeter = ball.diameter / Calibration.golfBallDiameterMeters
+                cal.ballDiameterPx = selectedBall.diameter
+                cal.pixelsPerMeter = selectedBall.diameter / Calibration.golfBallDiameterMeters
                 cal.isCalibrated = true
                 cal.save()
                 self.detectMessage = String(
@@ -618,6 +639,16 @@ struct SessionView: View {
         let focalPx = (longSide / 2) / tan(fov * .pi / 360)
         let distance = focalPx * Calibration.golfBallDiameterMeters / ball.diameter
         return distance.isFinite ? distance : nil
+    }
+
+    private func distanceOutsideAcceptedRange(_ distance: Double) -> Double {
+        if distance < Self.acceptedBallDistanceMeters.lowerBound {
+            return Self.acceptedBallDistanceMeters.lowerBound - distance
+        }
+        if distance > Self.acceptedBallDistanceMeters.upperBound {
+            return distance - Self.acceptedBallDistanceMeters.upperBound
+        }
+        return 0
     }
 
     private func startShot() {
