@@ -71,12 +71,101 @@ final class SwingAnalyzer {
             analysis.ballTrack = tracking.ballPoints.map { TrackPoint(t: $0.time, x: $0.x / w, y: $0.y / h) }
             analysis.clubTrack = tracking.clubPoints.map { TrackPoint(t: $0.time, x: $0.x / w, y: $0.y / h) }
             if let i = tracking.impactBallIndex, i < tracking.ballPoints.count { analysis.impactTime = tracking.ballPoints[i].time }
-            analysis.pipeline = "v1 blob tracker"
+            progress(0.6, "Reading body pose")
+            let (poses, size, duration) = Self.interimPoses(videoURL: request.clipURL)
+            analysis.poses = poses
+            if size.width > 0 {
+                analysis.frameWidth = Int(size.width)
+                analysis.frameHeight = Int(size.height)
+                analysis.duration = duration
+            }
+            analysis.phases = Self.interimPhases(poses, lead: request.handedness == .right ? .leftWrist : .rightWrist)
+            if let top = analysis.marker(.top)?.t, let address = analysis.marker(.address)?.t,
+               let impact = analysis.marker(.impact)?.t, top > address, impact > top {
+                let back = top - address, down = impact - top
+                analysis.metrics = [
+                    SwingMetric(id: "tempo.ratio", name: "Tempo", value: back / down, unit: ":1",
+                                tourRange: 2.7...3.3, rating: (2.7...3.3).contains(back / down) ? .tour : .good,
+                                explanation: "Backswing time divided by downswing time."),
+                    SwingMetric(id: "tempo.backswing", name: "Backswing", value: back, unit: "s", phase: .top),
+                    SwingMetric(id: "tempo.downswing", name: "Downswing", value: down, unit: "s", phase: .impact),
+                ]
+            }
+            analysis.pipeline = "interim: v1 blob tracker + \(PoseEstimatorFactory.make()?.name ?? "no pose")"
             let tracer = TracerRenderer.makeTracerImage(videoURL: request.clipURL, tracking: tracking)
+            let poster = Self.posterFrame(videoURL: request.clipURL, at: analysis.marker(.address)?.t ?? 0) ?? tracer
             progress(1, "Done")
             return AnalysisOutput(metrics: metrics, metricsError: failure, analysis: analysis,
-                                  thumbnail: tracer, tracerImage: tracer)
+                                  thumbnail: poster, tracerImage: tracer)
         }.value
+    }
+
+    // MARK: Interim helpers (replaced by the analysis workstream)
+
+    /// Pose every 8th frame (≈30 fps at 240 fps capture).
+    private static func interimPoses(videoURL: URL) -> ([PoseSample], CGSize, Double) {
+        guard let estimator = PoseEstimatorFactory.make() else { return ([], .zero, 0) }
+        let asset = AVURLAsset(url: videoURL)
+        let gen = AVAssetImageGenerator(asset: asset)
+        gen.appliesPreferredTrackTransform = true
+        gen.requestedTimeToleranceBefore = .zero
+        gen.requestedTimeToleranceAfter = .zero
+        let duration = asset.duration.seconds
+        guard duration.isFinite, duration > 0 else { return ([], .zero, 0) }
+        var poses: [PoseSample] = []
+        var size = CGSize.zero
+        var t = 0.0
+        while t < duration {
+            if let cg = try? gen.copyCGImage(at: CMTime(seconds: t, preferredTimescale: 600), actualTime: nil) {
+                size = CGSize(width: cg.width, height: cg.height)
+                if let p = estimator.pose(in: CIImage(cgImage: cg), t: t) { poses.append(p) }
+            }
+            t += 8.0 / 240.0
+        }
+        return (poses, size, duration)
+    }
+
+    /// Naive phases from the lead wrist: top = highest wrist, impact = lowest
+    /// wrist after top, address = first sample, finish = last sample.
+    private static func interimPhases(_ poses: [PoseSample], lead: BodyJoint) -> [SwingPhaseMarker] {
+        let pts = poses.compactMap { p in p.point(lead).map { (p.t, $0) } }
+        guard pts.count >= 6 else { return [] }
+        // The lead wrist goes low (address) → high (top) → low (impact) →
+        // high (finish). Impact = first return to address height after the
+        // hands have risen; top = highest point before that.
+        let addressY = pts.prefix(5).map(\.1.y).sorted()[min(2, pts.prefix(5).count - 1)]
+        var minIndex = 0
+        var topIndex: Int?
+        for (i, p) in pts.enumerated() {
+            if p.1.y < pts[minIndex].1.y { minIndex = i }
+            let rise = addressY - pts[minIndex].1.y
+            if rise > 0.08, p.1.y > pts[minIndex].1.y + 0.5 * rise { topIndex = minIndex; break }
+        }
+        guard let ti = topIndex else { return [] }
+        let top = pts[ti]
+        let window = pts[(ti + 1)...].prefix { $0.0 - top.0 <= 0.5 }
+        guard let impact = window.max(by: { $0.1.y < $1.1.y }) else { return [] }
+        let address = pts.first!.0
+        let finish = pts.last!.0
+        func mid(_ a: Double, _ b: Double) -> Double { a + (b - a) / 2 }
+        return [
+            SwingPhaseMarker(phase: .address, t: address, confidence: 0.3),
+            SwingPhaseMarker(phase: .toeUp, t: address + (top.0 - address) * 0.35, confidence: 0.2),
+            SwingPhaseMarker(phase: .midBackswing, t: address + (top.0 - address) * 0.65, confidence: 0.2),
+            SwingPhaseMarker(phase: .top, t: top.0, confidence: 0.5),
+            SwingPhaseMarker(phase: .midDownswing, t: mid(top.0, impact.0), confidence: 0.3),
+            SwingPhaseMarker(phase: .impact, t: impact.0, confidence: 0.5),
+            SwingPhaseMarker(phase: .midFollowThrough, t: mid(impact.0, finish), confidence: 0.2),
+            SwingPhaseMarker(phase: .finish, t: finish, confidence: 0.3),
+        ]
+    }
+
+    private static func posterFrame(videoURL: URL, at t: Double) -> UIImage? {
+        let gen = AVAssetImageGenerator(asset: AVURLAsset(url: videoURL))
+        gen.appliesPreferredTrackTransform = true
+        gen.maximumSize = CGSize(width: 720, height: 720)
+        guard let cg = try? gen.copyCGImage(at: CMTime(seconds: t, preferredTimescale: 600), actualTime: nil) else { return nil }
+        return UIImage(cgImage: cg)
     }
 }
 
