@@ -27,6 +27,7 @@ struct TrackingResult {
     var frameWidth: Int = 0
     var frameHeight: Int = 0
     var ballFound: Bool = false
+    var golfDetectorAssisted: Bool = false
 }
 
 /// One detected ball in a single frame (calibration).
@@ -108,13 +109,17 @@ final class TrackingEngine {
 
         let ballDiameterPx = expectedBallDiameterPx ?? 24
         let ballArea = Double.pi * pow(ballDiameterPx / 2.0, 2)
+        let golfDetector = ObjectDetector(.golfDetector)
+        let detectorInterval = max(1, Int((fps / 30).rounded()))
 
         var prevGray: GrayImage?
         var firstPTS: CMTime?
         var ballPos: CGPoint?
         var impactFound = false
+        var frameIndex = 0
 
         while let sample = output.copyNextSampleBuffer() {
+            defer { frameIndex += 1 }
             let pts = CMSampleBufferGetPresentationTimeStamp(sample)
             if firstPTS == nil { firstPTS = pts }
             let t = CMTimeSubtract(pts, firstPTS ?? pts).seconds
@@ -126,7 +131,49 @@ final class TrackingEngine {
             result.frameWidth = w
             result.frameHeight = h
 
+            var modelBallPosition: CGPoint?
+            if frameIndex.isMultiple(of: detectorInterval), let golfDetector {
+                let roi = ballPos.map { pos -> CGRect in
+                    let radius = max(80.0, ballDiameterPx * 3.0) * 2
+                    return CGRect(x: pos.x * 2 - radius, y: pos.y * 2 - radius,
+                                  width: radius * 2, height: radius * 2)
+                }
+                let candidates = golfDetector.detect(
+                    in: CIImage(cvPixelBuffer: pixelBuffer),
+                    roi: roi,
+                    confidence: 0.15
+                ).filter { detection in
+                    detection.label.localizedCaseInsensitiveContains("ball")
+                        || (golfDetector.classNames.isEmpty && detection.classIndex == 0)
+                }
+                let selected: Detection?
+                if let ballPos {
+                    let maxDistance = max(80.0, ballDiameterPx * 3.0)
+                    selected = candidates
+                        .filter { hypot($0.center.x / 2 - ballPos.x, $0.center.y / 2 - ballPos.y) <= maxDistance }
+                        .min {
+                            hypot($0.center.x / 2 - ballPos.x, $0.center.y / 2 - ballPos.y)
+                                < hypot($1.center.x / 2 - ballPos.x, $1.center.y / 2 - ballPos.y)
+                        }
+                } else {
+                    selected = candidates.first
+                }
+                if let selected {
+                    let point = CGPoint(x: selected.center.x / 2, y: selected.center.y / 2)
+                    modelBallPosition = point
+                    if let previous = ballPos, !impactFound,
+                       hypot(point.x - previous.x, point.y - previous.y) > ballDiameterPx * 1.2 {
+                        impactFound = true
+                        result.impactBallIndex = result.ballPoints.count
+                    }
+                    ballPos = point
+                    result.ballFound = true
+                    result.golfDetectorAssisted = true
+                }
+            }
+
             // --- Ball: bright-blob search ---
+            var ballPointRecorded = false
             if let bright = gray.thresholded(at: brightThreshold) {
                 if ballPos == nil {
                     // First sighting: full-frame search for a ball-sized bright blob.
@@ -134,6 +181,7 @@ final class TrackingEngine {
                         ballPos = blob.centroid
                         result.ballFound = true
                         result.ballPoints.append(TrackedPoint(x: blob.centroid.x, y: blob.centroid.y, time: t))
+                        ballPointRecorded = true
                     }
                 } else if let pos = ballPos {
                     // Tracked: search a small ROI around the last position.
@@ -144,6 +192,7 @@ final class TrackingEngine {
                         let dist = hypot(blob.centroid.x - pos.x, blob.centroid.y - pos.y)
                         ballPos = blob.centroid
                         result.ballPoints.append(TrackedPoint(x: blob.centroid.x, y: blob.centroid.y, time: t))
+                        ballPointRecorded = true
                         if !impactFound, dist > ballDiameterPx * 1.2 {
                             impactFound = true
                             result.impactBallIndex = result.ballPoints.count - 1
@@ -152,6 +201,11 @@ final class TrackingEngine {
                     // else: ball left the ROI/frame; keep last known position.
                 }
                 bright.free()
+            }
+
+            if let point = modelBallPosition, !ballPointRecorded {
+                ballPos = point
+                result.ballPoints.append(TrackedPoint(x: point.x, y: point.y, time: t))
             }
 
             // --- Clubhead: motion-blob search, pre-impact only ---

@@ -236,7 +236,7 @@ struct SessionView: View {
 
             VStack(spacing: 2) {
                 Text(ballDetectorStatus)
-                Text("Clip analysis: interim ball/club tracker + body pose")
+                Text("Clip analysis: GolfDetector (if available) + blob tracking + body pose")
             }
             .font(.caption2)
             .foregroundStyle(.white.opacity(0.85))

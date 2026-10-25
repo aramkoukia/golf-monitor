@@ -85,7 +85,7 @@ GolfMonitor/
   Core/Persistence/  ShotStore (shots.json + ShotMedia/<id>/{clip.mov, analysis.json, thumb.jpg}), SettingsStore
   Core/ML/           ImagePreprocessor (letterbox), ObjectDetector (YOLO NMS/raw, ROI tiling),
                      PoseEstimator (Vision on device / YOLO11n-pose Core ML in Simulator), ModelCatalog
-  Core/Analysis/     SwingAnalyzer (API contract), TrackingEngine (v1 blob tracker), MetricsCalculator
+  Core/Analysis/     SwingAnalyzer (API contract), TrackingEngine (GolfDetector-assisted ball tracking + v1 blob continuity/club tracking), MetricsCalculator
   Core/Capture/      CameraManager (v1)
   Core/Demo/         DebugLaunch (launch args), DemoData (synthetic history + bundled CC0 clips)
   Features/<Area>/   one folder per feature area (Range, Library, Insights, Studio, Practice, Profile, Onboarding)
@@ -108,16 +108,17 @@ environment); ship compiled `.mlmodelc` folders instead.
 The Range tab now sends recorded clips through `SwingAnalyzer`, then saves the
 clip, analysis JSON, and poster frame with the shot in `ShotStore`. The current
 analyzer is still an interim implementation: ball/club paths use the v1 blob
-tracker, body pose uses the available pose estimator, and swing phases use
-wrist-position heuristics. Its pipeline label is surfaced in the shot result.
-Capture rate is passed through from the camera.
+tracker, with periodic GolfDetector detections for ball initialization and
+reacquisition; body pose uses the available pose estimator, and swing phases
+use wrist-position heuristics. Its pipeline label is surfaced in the shot
+result. Capture rate is passed through from the camera.
 
 Calibration uses the new `ObjectDetector` first, preferring the trained
-`GolfBallDetector.mlpackage` from the `main` branch (registered as
-`GolfDetector`) and otherwise trying the generic COCO sports-ball class.
-`GolferPose.mlmodelc` is also bundled; SwingNet is not. Recorded-clip tracking
-still uses the interim v1 tracker, and swing-event recognition is not yet
-using SwingNet.
+`GolfBallDetector.mlpackage` (registered as `GolfDetector`) and otherwise
+trying the generic COCO sports-ball class. `GolferPose.mlmodelc` is also
+bundled; SwingNet is not. Recorded-clip club tracking and frame-to-frame ball
+continuity still use the interim v1 tracker; swing-event recognition is not
+yet using SwingNet.
 
 Insights, Practice, and Swing Studio are usable first passes: Insights charts
 measured carry and club averages; Practice offers a five-shot 150-yard carry

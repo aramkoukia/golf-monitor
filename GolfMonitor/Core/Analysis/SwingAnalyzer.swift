@@ -100,7 +100,10 @@ final class SwingAnalyzer {
                     SwingMetric(id: "tempo.downswing", name: "Downswing", value: down, unit: "s", phase: .impact),
                 ]
             }
-            analysis.pipeline = "interim: v1 blob tracker + \(PoseEstimatorFactory.make()?.name ?? "no pose")"
+            let ballTracker = tracking.golfDetectorAssisted
+                ? "GolfDetector-assisted v1 blob tracker"
+                : "v1 blob tracker"
+            analysis.pipeline = "\(ballTracker) + \(PoseEstimatorFactory.make()?.name ?? "no pose")"
             let tracer = TracerRenderer.makeTracerImage(videoURL: request.clipURL, tracking: tracking)
             let poster = Self.posterFrame(videoURL: request.clipURL, at: analysis.marker(.address)?.t ?? 0) ?? tracer
             progress(1, "Done")

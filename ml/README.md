@@ -11,12 +11,14 @@ can't run in every environment; the source `.mlpackage`s live in
 The trained `GolfBallDetector.mlpackage` at the repository root is also added
 to the app target and compiled by Xcode; `ModelCatalog` loads it as the
 `GolfDetector` model. `SwingNetEncoder` and `SwingNetSequence` are not
-bundled, so the app does not run SwingNet. Recorded-clip ball and club paths
-still come from the interim v1 blob tracker; see `docs/V2_PLAN.md`.
+bundled, so the app does not run SwingNet. `GolfDetector` is used for
+calibration and periodic ball detection during recorded-clip analysis; the
+v1 blob tracker fills in frame-to-frame continuity and still tracks the club.
+See `docs/V2_PLAN.md`.
 
 | Model | File | What it does | Base / licence |
 |---|---|---|---|
-| **GolfDetector** | `GolfBallDetector.mlpackage` (Xcode compiled) | Detects golf balls (fine-tuned YOLOv8n). Preferred calibration detector; loaded through `ModelCatalog`. | Ultralytics YOLOv8n fine-tuned by us → AGPL-3.0 (Ultralytics) |
+| **GolfDetector** | `GolfBallDetector.mlpackage` (Xcode compiled) | Detects golf balls (fine-tuned YOLOv8n). Used for calibration and periodic ball detection during recorded-clip tracking. | Ultralytics YOLOv8n fine-tuned by us → AGPL-3.0 (Ultralytics) |
 | **GolferPose** | `GolferPose.mlmodelc` (bundled) | 17-keypoint body pose (YOLO11n-pose). Fallback when Apple Vision body pose is unavailable (e.g. Simulator). | Ultralytics YOLO11n-pose → AGPL-3.0 |
 | **SwingNet** | `SwingNetEncoder.mlmodelc` + `SwingNetSequence.mlmodelc` (not bundled) | Intended GolfDB swing-event detector (address, takeaway, half-way back, top, delivery, impact, release, finish). MobileNetV2 + BiLSTM. | McNally et al., *GolfDB* (CVPRW 2019) — **CC BY-NC 4.0** (non-commercial) |
 | COCODetector | `COCODetector.mlmodelc` (bundled) | Generic COCO YOLOv8n sports-ball fallback for calibration. Not golf-specific. | Ultralytics → AGPL-3.0 |

@@ -51,6 +51,14 @@ final class MLPipelineTests: XCTestCase {
         Self.render(cg, pose: nil, detections: dets, name: "coco_faceon")
     }
 
+    func testGolfDetectorIsBundledAndRecognizesBallClass() throws {
+        let detector = try XCTUnwrap(ObjectDetector(.golfDetector))
+        XCTAssertTrue(
+            detector.classNames.contains { $0.localizedCaseInsensitiveContains("ball") },
+            "Unexpected GolfDetector classes: \(detector.classNames)"
+        )
+    }
+
     static func render(_ cg: CGImage, pose: PoseSample?, detections: [Detection], name: String) {
         let size = CGSize(width: cg.width, height: cg.height)
         let img = UIGraphicsImageRenderer(size: size).image { ctx in
