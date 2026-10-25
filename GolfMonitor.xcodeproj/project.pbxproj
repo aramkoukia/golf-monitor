@@ -3,39 +3,59 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 56;
+	objectVersion = 77;
 	objects = {
 
-/* Begin PBXBuildFile section */
-		2445BE693080667D0025FE4E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2445BE683080667D0025FE4E /* Assets.xcassets */; };
-		2445BE6B308D53CB0025FE4E /* yolov8n 2.mlpackage in Sources */ = {isa = PBXBuildFile; fileRef = 2445BE6A308D53CB0025FE4E /* yolov8n 2.mlpackage */; };
-		A10000000000000000000020 /* GolfMonitorApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000010 /* GolfMonitorApp.swift */; };
-		A10000000000000000000021 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000011 /* Models.swift */; };
-		A10000000000000000000022 /* CameraManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000012 /* CameraManager.swift */; };
-		A10000000000000000000023 /* TrackingEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000013 /* TrackingEngine.swift */; };
-		A10000000000000000000024 /* MetricsCalculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000014 /* MetricsCalculator.swift */; };
-		A10000000000000000000025 /* CalibrationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000015 /* CalibrationView.swift */; };
-		A10000000000000000000026 /* SessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000016 /* SessionView.swift */; };
-		A10000000000000000000027 /* ShotHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000017 /* ShotHistoryView.swift */; };
-/* End PBXBuildFile section */
+/* Begin PBXContainerItemProxy section */
+		B10000000000000000000026 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A10000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A10000000000000000000005;
+			remoteInfo = GolfMonitor;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		2445BE683080667D0025FE4E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		2445BE6A308D53CB0025FE4E /* yolov8n 2.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = "yolov8n 2.mlpackage"; sourceTree = "<group>"; };
-		A10000000000000000000010 /* GolfMonitorApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GolfMonitorApp.swift; sourceTree = "<group>"; };
-		A10000000000000000000011 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
-		A10000000000000000000012 /* CameraManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraManager.swift; sourceTree = "<group>"; };
-		A10000000000000000000013 /* TrackingEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackingEngine.swift; sourceTree = "<group>"; };
-		A10000000000000000000014 /* MetricsCalculator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetricsCalculator.swift; sourceTree = "<group>"; };
-		A10000000000000000000015 /* CalibrationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibrationView.swift; sourceTree = "<group>"; };
-		A10000000000000000000016 /* SessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionView.swift; sourceTree = "<group>"; };
-		A10000000000000000000017 /* ShotHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShotHistoryView.swift; sourceTree = "<group>"; };
-		A10000000000000000000018 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A10000000000000000000019 /* GolfMonitor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GolfMonitor.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B10000000000000000000025 /* GolfMonitorTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GolfMonitorTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		B1000000000000000000000F /* Exceptions for "GolfMonitor" folder in "GolfMonitor" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = A10000000000000000000005 /* GolfMonitor */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		B10000000000000000000010 /* GolfMonitor */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				B1000000000000000000000F /* Exceptions for "GolfMonitor" folder in "GolfMonitor" target */,
+			);
+			path = GolfMonitor;
+			sourceTree = "<group>";
+		};
+		B10000000000000000000011 /* GolfMonitorTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = GolfMonitorTests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		A10000000000000000000007 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B10000000000000000000022 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -48,33 +68,17 @@
 		A10000000000000000000002 = {
 			isa = PBXGroup;
 			children = (
-				2445BE6A308D53CB0025FE4E /* yolov8n 2.mlpackage */,
-				A10000000000000000000003 /* GolfMonitor */,
+				B10000000000000000000010 /* GolfMonitor */,
+				B10000000000000000000011 /* GolfMonitorTests */,
 				A10000000000000000000004 /* Products */,
 			);
-			sourceTree = "<group>";
-		};
-		A10000000000000000000003 /* GolfMonitor */ = {
-			isa = PBXGroup;
-			children = (
-				2445BE683080667D0025FE4E /* Assets.xcassets */,
-				A10000000000000000000010 /* GolfMonitorApp.swift */,
-				A10000000000000000000011 /* Models.swift */,
-				A10000000000000000000012 /* CameraManager.swift */,
-				A10000000000000000000013 /* TrackingEngine.swift */,
-				A10000000000000000000014 /* MetricsCalculator.swift */,
-				A10000000000000000000015 /* CalibrationView.swift */,
-				A10000000000000000000016 /* SessionView.swift */,
-				A10000000000000000000017 /* ShotHistoryView.swift */,
-				A10000000000000000000018 /* Info.plist */,
-			);
-			path = GolfMonitor;
 			sourceTree = "<group>";
 		};
 		A10000000000000000000004 /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				A10000000000000000000019 /* GolfMonitor.app */,
+				B10000000000000000000025 /* GolfMonitorTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -94,12 +98,38 @@
 			);
 			dependencies = (
 			);
+			fileSystemSynchronizedGroups = (
+				B10000000000000000000010 /* GolfMonitor */,
+			);
 			name = GolfMonitor;
 			packageProductDependencies = (
 			);
-			productName = "$(TARGET_NAME)";
+			productName = GolfMonitor;
 			productReference = A10000000000000000000019 /* GolfMonitor.app */;
 			productType = "com.apple.product-type.application";
+		};
+		B10000000000000000000020 /* GolfMonitorTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B10000000000000000000030 /* Build configuration list for PBXNativeTarget "GolfMonitorTests" */;
+			buildPhases = (
+				B10000000000000000000021 /* Sources */,
+				B10000000000000000000022 /* Frameworks */,
+				B10000000000000000000023 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B10000000000000000000024 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				B10000000000000000000011 /* GolfMonitorTests */,
+			);
+			name = GolfMonitorTests;
+			packageProductDependencies = (
+			);
+			productName = GolfMonitorTests;
+			productReference = B10000000000000000000025 /* GolfMonitorTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
 
@@ -108,10 +138,19 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
+				LastSwiftUpdateCheck = 2660;
 				LastUpgradeCheck = 2660;
+				TargetAttributes = {
+					A10000000000000000000005 = {
+						CreatedOnToolsVersion = 26.6;
+					};
+					B10000000000000000000020 = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = A10000000000000000000005;
+					};
+				};
 			};
 			buildConfigurationList = A10000000000000000000009 /* Build configuration list for PBXProject "GolfMonitor" */;
-			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -119,11 +158,14 @@
 				Base,
 			);
 			mainGroup = A10000000000000000000002;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
 			productRefGroup = A10000000000000000000004 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				A10000000000000000000005 /* GolfMonitor */,
+				B10000000000000000000020 /* GolfMonitorTests */,
 			);
 		};
 /* End PBXProject section */
@@ -133,7 +175,13 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2445BE693080667D0025FE4E /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B10000000000000000000023 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -144,25 +192,32 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A10000000000000000000020 /* GolfMonitorApp.swift in Sources */,
-				A10000000000000000000021 /* Models.swift in Sources */,
-				A10000000000000000000022 /* CameraManager.swift in Sources */,
-				A10000000000000000000023 /* TrackingEngine.swift in Sources */,
-				A10000000000000000000024 /* MetricsCalculator.swift in Sources */,
-				A10000000000000000000025 /* CalibrationView.swift in Sources */,
-				A10000000000000000000026 /* SessionView.swift in Sources */,
-				A10000000000000000000027 /* ShotHistoryView.swift in Sources */,
-				2445BE6B308D53CB0025FE4E /* yolov8n 2.mlpackage in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B10000000000000000000021 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B10000000000000000000024 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A10000000000000000000005 /* GolfMonitor */;
+			targetProxy = B10000000000000000000026 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		A1000000000000000000000B /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
@@ -210,15 +265,13 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = GolfMonitor/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 2.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
 			name = Debug;
@@ -227,6 +280,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
@@ -269,10 +323,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = GolfMonitor/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 2.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
@@ -286,12 +338,15 @@
 		A1000000000000000000000D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = GolfMonitor/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
-					"@executable_path/Frameworks",
 					"$(inherited)",
+					"@executable_path/Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.golfmonitor;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -304,18 +359,57 @@
 		A1000000000000000000000E /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = GolfMonitor/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
-					"@executable_path/Frameworks",
 					"$(inherited)",
+					"@executable_path/Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.golfmonitor;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		B10000000000000000000031 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 2.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.golfmonitorTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GolfMonitor.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/GolfMonitor";
+			};
+			name = Debug;
+		};
+		B10000000000000000000032 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 2.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.golfmonitorTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GolfMonitor.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/GolfMonitor";
 			};
 			name = Release;
 		};
@@ -336,6 +430,15 @@
 			buildConfigurations = (
 				A1000000000000000000000D /* Debug */,
 				A1000000000000000000000E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B10000000000000000000030 /* Build configuration list for PBXNativeTarget "GolfMonitorTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B10000000000000000000031 /* Debug */,
+				B10000000000000000000032 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

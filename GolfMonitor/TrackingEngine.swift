@@ -308,6 +308,7 @@ final class TrackingEngine {
             "GolfBallDetection",
             "GolfBallModel",
             "yolov8n",
+            "COCODetector",
             "yolov8n 2",
             "yolov8n_coreml",
             "yolov8n-pose",

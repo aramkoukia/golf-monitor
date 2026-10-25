@@ -1,3 +1,14 @@
 GolfMonitor.xcodeproj/project.xcworkspace/xcuserdata/Aram.xcuserdatad/UserInterfaceState.xcuserstate
 *.xcuserstate
 runs/
+
+# Build output
+build/
+DerivedData/
+*.xcresult
+
+# ML training artifacts (kept outside the repo)
+ml/datasets/
+ml/runs/
+__pycache__/
+.venv/
