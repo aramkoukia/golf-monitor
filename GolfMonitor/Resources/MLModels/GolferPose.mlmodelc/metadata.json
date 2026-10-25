@@ -1,0 +1,93 @@
+[
+  {
+    "shortDescription" : "Ultralytics YOLO11n-pose model trained on \/ultralytics\/ultralytics\/cfg\/datasets\/coco-pose.yaml",
+    "metadataOutputVersion" : "3.0",
+    "outputSchema" : [
+      {
+        "hasShapeFlexibility" : "0",
+        "isOptional" : "0",
+        "dataType" : "Float32",
+        "formattedType" : "MultiArray (Float32 1 × 56 × 8400)",
+        "shortDescription" : "",
+        "shape" : "[1, 56, 8400]",
+        "name" : "var_1345",
+        "type" : "MultiArray"
+      }
+    ],
+    "version" : "8.4.188",
+    "modelParameters" : [
+
+    ],
+    "author" : "Ultralytics",
+    "specificationVersion" : 6,
+    "storagePrecision" : "Float16",
+    "license" : "AGPL-3.0 License (https:\/\/ultralytics.com\/license)",
+    "mlProgramOperationTypeHistogram" : {
+      "Concat" : 23,
+      "Silu" : 83,
+      "SliceByIndex" : 2,
+      "Sub" : 2,
+      "Transpose" : 2,
+      "Matmul" : 2,
+      "UpsampleNearestNeighbor" : 2,
+      "Softmax" : 2,
+      "Mul" : 6,
+      "Cast" : 2,
+      "Reshape" : 16,
+      "Add" : 17,
+      "MaxPool" : 3,
+      "Sigmoid" : 2,
+      "Split" : 11,
+      "Conv" : 97
+    },
+    "computePrecision" : "Mixed (Float16, Float32, Int32)",
+    "stateSchema" : [
+
+    ],
+    "isUpdatable" : "0",
+    "availability" : {
+      "macOS" : "12.0",
+      "tvOS" : "15.0",
+      "visionOS" : "1.0",
+      "watchOS" : "8.0",
+      "iOS" : "15.0",
+      "macCatalyst" : "15.0"
+    },
+    "modelType" : {
+      "name" : "MLModelType_mlProgram"
+    },
+    "inputSchema" : [
+      {
+        "height" : "640",
+        "colorspace" : "RGB",
+        "isOptional" : "0",
+        "width" : "640",
+        "isColor" : "1",
+        "formattedType" : "Image (Color 640 × 640)",
+        "hasSizeFlexibility" : "0",
+        "type" : "Image",
+        "shortDescription" : "",
+        "name" : "image"
+      }
+    ],
+    "userDefinedMetadata" : {
+      "batch" : "1",
+      "head" : "Pose",
+      "com.github.apple.coremltools.version" : "8.3.0",
+      "docs" : "https:\/\/docs.ultralytics.com",
+      "imgsz" : "[640, 640]",
+      "names" : "{0: 'person'}",
+      "channels" : "3",
+      "stride" : "32",
+      "date" : "2026-10-24T17:44:38.056329-07:00",
+      "args" : "{'batch': 1, 'quantize': 16, 'nms': False, 'dynamic': False}",
+      "com.github.apple.coremltools.source_dialect" : "TorchScript",
+      "com.github.apple.coremltools.source" : "torch==2.7.1",
+      "kpt_shape" : "[17, 3]",
+      "task" : "pose",
+      "end2end" : "False"
+    },
+    "generatedClassName" : "yolo11n_pose",
+    "method" : "predict"
+  }
+]

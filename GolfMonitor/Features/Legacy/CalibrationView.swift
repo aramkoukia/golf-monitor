@@ -1,3 +1,4 @@
+// Legacy v1 Setup tab — replaced by Features/Settings. Delete once SettingsView ships.
 import SwiftUI
 
 /// Setup tab: display-unit settings only. Ball calibration lives on the

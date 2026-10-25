@@ -1,5 +1,6 @@
 import AVFoundation
 import CoreGraphics
+import CoreImage
 import CoreML
 import Vision
 
@@ -26,6 +27,7 @@ struct TrackingResult {
     var frameWidth: Int = 0
     var frameHeight: Int = 0
     var ballFound: Bool = false
+    var golfDetectorAssisted: Bool = false
 }
 
 /// One detected ball in a single frame (calibration).
@@ -41,6 +43,7 @@ struct DetectedBall {
 struct BallDetectionOutcome {
     var ball: DetectedBall?
     var failureReason: String?
+    var candidates: [DetectedBall] = []
 }
 
 // MARK: - Tracking engine
@@ -107,13 +110,17 @@ final class TrackingEngine {
 
         let ballDiameterPx = expectedBallDiameterPx ?? 24
         let ballArea = Double.pi * pow(ballDiameterPx / 2.0, 2)
+        let golfDetector = ObjectDetector(.golfDetector)
+        let detectorInterval = max(1, Int((fps / 30).rounded()))
 
         var prevGray: GrayImage?
         var firstPTS: CMTime?
         var ballPos: CGPoint?
         var impactFound = false
+        var frameIndex = 0
 
         while let sample = output.copyNextSampleBuffer() {
+            defer { frameIndex += 1 }
             let pts = CMSampleBufferGetPresentationTimeStamp(sample)
             if firstPTS == nil { firstPTS = pts }
             let t = CMTimeSubtract(pts, firstPTS ?? pts).seconds
@@ -125,7 +132,41 @@ final class TrackingEngine {
             result.frameWidth = w
             result.frameHeight = h
 
+            var modelBallPosition: CGPoint?
+            if frameIndex.isMultiple(of: detectorInterval), let golfDetector {
+                let roi = ballPos.map { pos -> CGRect in
+                    let radius = max(80.0, ballDiameterPx * 3.0) * 2
+                    return CGRect(x: pos.x * 2 - radius, y: pos.y * 2 - radius,
+                                  width: radius * 2, height: radius * 2)
+                }
+                let image = CIImage(cvPixelBuffer: pixelBuffer)
+                let candidates = golfDetector.detectTiled(
+                    in: image,
+                    region: roi,
+                    confidence: 0.15
+                ).filter { detection in
+                    detection.label.localizedCaseInsensitiveContains("ball")
+                        || (golfDetector.classNames.isEmpty && detection.classIndex == 0)
+                }
+                let selected: Detection?
+                if let ballPos {
+                    let maxDistance = max(80.0, ballDiameterPx * 3.0)
+                    selected = candidates
+                        .filter { hypot($0.center.x / 2 - ballPos.x, $0.center.y / 2 - ballPos.y) <= maxDistance }
+                        .min {
+                            hypot($0.center.x / 2 - ballPos.x, $0.center.y / 2 - ballPos.y)
+                                < hypot($1.center.x / 2 - ballPos.x, $1.center.y / 2 - ballPos.y)
+                        }
+                } else {
+                    selected = candidates.first
+                }
+                if let selected {
+                    modelBallPosition = CGPoint(x: selected.center.x / 2, y: selected.center.y / 2)
+                }
+            }
+
             // --- Ball: bright-blob search ---
+            var ballPointRecorded = false
             if let bright = gray.thresholded(at: brightThreshold) {
                 if ballPos == nil {
                     // First sighting: full-frame search for a ball-sized bright blob.
@@ -133,6 +174,7 @@ final class TrackingEngine {
                         ballPos = blob.centroid
                         result.ballFound = true
                         result.ballPoints.append(TrackedPoint(x: blob.centroid.x, y: blob.centroid.y, time: t))
+                        ballPointRecorded = true
                     }
                 } else if let pos = ballPos {
                     // Tracked: search a small ROI around the last position.
@@ -143,6 +185,7 @@ final class TrackingEngine {
                         let dist = hypot(blob.centroid.x - pos.x, blob.centroid.y - pos.y)
                         ballPos = blob.centroid
                         result.ballPoints.append(TrackedPoint(x: blob.centroid.x, y: blob.centroid.y, time: t))
+                        ballPointRecorded = true
                         if !impactFound, dist > ballDiameterPx * 1.2 {
                             impactFound = true
                             result.impactBallIndex = result.ballPoints.count - 1
@@ -151,6 +194,18 @@ final class TrackingEngine {
                     // else: ball left the ROI/frame; keep last known position.
                 }
                 bright.free()
+            }
+
+            if let point = modelBallPosition, !ballPointRecorded {
+                if let previous = ballPos, !impactFound,
+                   hypot(point.x - previous.x, point.y - previous.y) > ballDiameterPx * 1.2 {
+                    impactFound = true
+                    result.impactBallIndex = result.ballPoints.count
+                }
+                ballPos = point
+                result.ballFound = true
+                result.golfDetectorAssisted = true
+                result.ballPoints.append(TrackedPoint(x: point.x, y: point.y, time: t))
             }
 
             // --- Clubhead: motion-blob search, pre-impact only ---
@@ -184,19 +239,32 @@ final class TrackingEngine {
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
             return BallDetectionOutcome(ball: nil, failureReason: "Camera frame has no image buffer.")
         }
-        guard let modelURL = Self.bundledGolfBallModelURL() else {
-            return BallDetectionOutcome(
-                ball: nil,
-                failureReason: "The trained GolfBallDetector model isn't bundled in the app."
-            )
+        let image = CIImage(cvPixelBuffer: pixelBuffer)
+        for which in [BundledModel.golfDetector, .cocoDetector] {
+            guard let detector = ObjectDetector(which) else { continue }
+            let classes: Set<Int>? = which == .cocoDetector ? [32] : nil
+            let detections = detector.detectTiled(in: image, tile: 640, confidence: 0.25, classes: classes)
+                .filter { detection in
+                    detection.label.localizedCaseInsensitiveContains("ball")
+                        || (which == .golfDetector && detector.classNames.isEmpty && detection.classIndex == 0)
+                }
+            let candidates = detections.map {
+                DetectedBall(center: $0.center, diameter: $0.diameter,
+                             frameWidth: CVPixelBufferGetWidth(pixelBuffer),
+                             frameHeight: CVPixelBufferGetHeight(pixelBuffer))
+            }
+            if let ball = candidates.max(by: { $0.diameter < $1.diameter }) {
+                return BallDetectionOutcome(
+                    ball: ball,
+                    failureReason: nil,
+                    candidates: candidates
+                )
+            }
         }
-        let model: MLModel
-        do {
-            model = try MLModel(contentsOf: modelURL)
-        } catch {
+        guard let model = Self.loadBundledBallModel() else {
             return BallDetectionOutcome(
                 ball: nil,
-                failureReason: "Couldn't load the trained GolfBallDetector model: \(error.localizedDescription)"
+                failureReason: "No bundled Core ML ball detector could be loaded."
             )
         }
 
@@ -234,24 +302,23 @@ final class TrackingEngine {
                 return
             }
 
-            // The fine-tuned one-class YOLO model exports [1, 5, anchors]:
-            // center x/y, box width/height, and the golfball confidence.
+            // The fine-tuned golf model uses 5 values per anchor; COCO uses 84.
             let shape = output.shape.map(\.intValue)
             guard shape.count == 3, shape[0] == 1 else {
-                failureReason = "Unsupported GolfBallDetector tensor shape: \(shape). Expected [1, 5, anchors] or [1, anchors, 5]."
+                failureReason = "Unsupported YOLO tensor shape: \(shape)."
                 return
             }
-            let channelsFirst = (5...84).contains(shape[1]) && shape[2] > 84
-            let channelsLast = (5...84).contains(shape[2]) && shape[1] > 84
+            let channelsFirst = [5, 84].contains(shape[1]) && shape[2] > shape[1]
+            let channelsLast = [5, 84].contains(shape[2]) && shape[1] > shape[2]
             guard channelsFirst || channelsLast else {
-                failureReason = "Unsupported GolfBallDetector tensor shape: \(shape). Expected 5 values per anchor."
+                failureReason = "Unsupported YOLO tensor shape: \(shape). Expected 5 or 84 values per anchor."
                 return
             }
 
             let featureCount = channelsFirst ? shape[1] : shape[2]
             let classCount = featureCount - 4
-            guard classCount == 1 else {
-                failureReason = "GolfBallDetector must have one golf-ball class; its output contains \(classCount) classes."
+            guard classCount == 1 || classCount == 80 else {
+                failureReason = "Unsupported YOLO class count: \(classCount). Expected one golf-ball class or 80 COCO classes."
                 return
             }
             let anchorCount = channelsFirst ? shape[2] : shape[1]
@@ -261,7 +328,7 @@ final class TrackingEngine {
                     : [0, anchor, channel] as [NSNumber]
                 return output[indices].doubleValue
             }
-            let golfBallChannel = 4
+            let golfBallChannel = classCount == 1 ? 4 : 4 + 32
             var bestAnchor: Int?
             var bestConfidence = 0.25
             for anchor in 0..<anchorCount {
@@ -272,7 +339,8 @@ final class TrackingEngine {
                 }
             }
             guard let bestAnchor else {
-                failureReason = "Core ML ran, but GolfBallDetector found no golf ball above 0.25 confidence."
+                let modelName = classCount == 1 ? "GolfBallDetector" : "COCO sports-ball"
+                failureReason = "Core ML ran, but \(modelName) found no ball above 0.25 confidence."
                 return
             }
 
@@ -311,10 +379,51 @@ final class TrackingEngine {
         return BallDetectionOutcome(ball: detected, failureReason: failureReason)
     }
 
-    private static func bundledGolfBallModelURL() -> URL? {
-        Bundle.main.url(forResource: "GolfBallDetector", withExtension: "mlmodelc") ??
-            Bundle.main.url(forResource: "GolfBallDetector", withExtension: "mlmodel") ??
-            Bundle.main.url(forResource: "GolfBallDetector", withExtension: "mlpackage")
+    /// Loads the first local Core ML model that looks like a ball detector.
+    private static func loadBundledBallModel() -> MLModel? {
+        let candidates = [
+            "GolfBallDetector",
+            "GolfBall",
+            "BallDetector",
+            "BallDetection",
+            "GolfBallDetection",
+            "GolfBallModel",
+            "yolov8n",
+            "COCODetector",
+            "yolov8n 2",
+            "yolov8n_coreml",
+            "yolov8n-pose",
+            "yolov8n_pose_coreml",
+            "yolov88n",
+            "yolov8n-seg",
+            "yolov8n_seg_coreml",
+            "yolo11n",
+            "yolo11n-pose",
+            "yolo11n_pose_coreml"
+        ]
+
+        for name in candidates {
+            if let url = Bundle.main.url(forResource: name, withExtension: "mlmodelc") ??
+                Bundle.main.url(forResource: name, withExtension: "mlmodel") ??
+                Bundle.main.url(forResource: name, withExtension: "mlpackage") {
+                if let model = try? MLModel(contentsOf: url) {
+                    return model
+                }
+            }
+        }
+
+        let modelURLs = (Bundle.main.urls(forResourcesWithExtension: "mlmodelc", subdirectory: nil) ?? []) +
+            (Bundle.main.urls(forResourcesWithExtension: "mlpackage", subdirectory: nil) ?? [])
+        for url in modelURLs {
+            if let model = try? MLModel(contentsOf: url) {
+                let name = url.deletingPathExtension().lastPathComponent.lowercased()
+                if name.contains("ball") || name.contains("golf") || name.contains("yolov8n") {
+                    return model
+                }
+            }
+        }
+
+        return nil
     }
 
     static func detectBallDiameter(in sampleBuffer: CMSampleBuffer) -> Double? {
