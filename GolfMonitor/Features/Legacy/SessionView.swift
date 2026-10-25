@@ -129,36 +129,72 @@ struct SessionView: View {
     }
 
     private var idleControls: some View {
-        VStack(spacing: 0) {
-            sessionHeader
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
+        GeometryReader { geometry in
+            if geometry.size.width > geometry.size.height {
+                ZStack(alignment: .topLeading) {
+                    sessionHeader
+                        .frame(maxWidth: min(geometry.size.width * 0.55, 440), alignment: .leading)
 
-            Spacer(minLength: 28)
+                    HStack {
+                        Spacer(minLength: 0)
+                        VStack(spacing: 10) {
+                            if !camera.isSessionRunning {
+                                cameraConnectionCard
+                            }
 
-            if !camera.isSessionRunning {
-                cameraConnectionCard
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 14)
+                            if let err = errorMessage {
+                                inlineNotice(err, color: Theme.Palette.signalRed, icon: "exclamationmark.triangle.fill")
+                            }
+
+                            if let msg = detectMessage {
+                                inlineNotice(
+                                    msg,
+                                    color: detectedBall == nil ? Theme.Palette.caution : Theme.Palette.ion,
+                                    icon: detectedBall == nil ? "scope" : "checkmark.circle.fill"
+                                )
+                            }
+
+                            shotControlDeck(compact: true)
+                        }
+                        .frame(width: min(340, geometry.size.width * 0.4))
+                    }
+                    .frame(maxHeight: .infinity)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            } else {
+                VStack(spacing: 0) {
+                    sessionHeader
+                        .padding(.horizontal, 20)
+                        .padding(.top, 8)
+
+                    Spacer(minLength: 28)
+
+                    if !camera.isSessionRunning {
+                        cameraConnectionCard
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 14)
+                    }
+
+                    if let err = errorMessage {
+                        inlineNotice(err, color: Theme.Palette.signalRed, icon: "exclamationmark.triangle.fill")
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 12)
+                    }
+
+                    if let msg = detectMessage {
+                        inlineNotice(
+                            msg,
+                            color: detectedBall == nil ? Theme.Palette.caution : Theme.Palette.ion,
+                            icon: detectedBall == nil ? "scope" : "checkmark.circle.fill"
+                        )
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 12)
+                    }
+
+                    shotControlDeck()
+                }
             }
-
-            if let err = errorMessage {
-                inlineNotice(err, color: Theme.Palette.signalRed, icon: "exclamationmark.triangle.fill")
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 12)
-            }
-
-            if let msg = detectMessage {
-                inlineNotice(
-                    msg,
-                    color: detectedBall == nil ? Theme.Palette.caution : Theme.Palette.ion,
-                    icon: detectedBall == nil ? "scope" : "checkmark.circle.fill"
-                )
-                .padding(.horizontal, 20)
-                .padding(.bottom, 12)
-            }
-
-            shotControlDeck
         }
     }
 
@@ -232,11 +268,11 @@ struct SessionView: View {
             .background(Theme.Palette.plasma, in: Capsule())
         }
         .padding(16)
-        .contentCard(cornerRadius: 20, elevated: true)
+        .glassCard(cornerRadius: 20, clear: true)
     }
 
-    private var shotControlDeck: some View {
-        VStack(alignment: .leading, spacing: 16) {
+    private func shotControlDeck(compact: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: compact ? 10 : 16) {
             challengeCard
 
             HStack {
@@ -260,18 +296,8 @@ struct SessionView: View {
 
             shotActions
         }
-        .padding(16)
-        .background {
-            UnevenRoundedRectangle(topLeadingRadius: 26, topTrailingRadius: 26)
-                .fill(Theme.Palette.void.opacity(0.94))
-                .overlay(alignment: .top) {
-                    Rectangle()
-                        .fill(LinearGradient(colors: [.clear, Theme.Palette.plasma.opacity(0.45), .clear],
-                                             startPoint: .leading, endPoint: .trailing))
-                        .frame(height: 1)
-                }
-                .ignoresSafeArea(edges: .bottom)
-        }
+        .padding(compact ? 12 : 16)
+        .glassCard(cornerRadius: 26, clear: true)
     }
 
     @ViewBuilder
@@ -296,7 +322,7 @@ struct SessionView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(16)
-            .contentCard(cornerRadius: 18, elevated: true)
+            .glassCard(cornerRadius: 18, clear: true)
         } else if !router.rangeContext.isFree,
                   let target = router.rangeContext.currentTarget() {
             HStack(spacing: 12) {
@@ -317,7 +343,7 @@ struct SessionView: View {
                     .lineLimit(2)
             }
             .padding(14)
-            .contentCard(cornerRadius: 18)
+            .glassCard(cornerRadius: 18, clear: true)
         }
     }
 
@@ -335,7 +361,10 @@ struct SessionView: View {
                             .foregroundStyle(selected ? Theme.Palette.void : Theme.Palette.floodlight)
                             .padding(.horizontal, 15)
                             .frame(height: 38)
-                            .background(selected ? Theme.Palette.plasma : Theme.Palette.graphite, in: Capsule())
+                            .background(
+                                selected ? Theme.Palette.plasma.opacity(0.82) : Color.white.opacity(0.06),
+                                in: Capsule()
+                            )
                             .overlay {
                                 Capsule().strokeBorder(
                                     selected ? Theme.Palette.plasma : Theme.Palette.hairline,
@@ -399,24 +428,21 @@ struct SessionView: View {
                     Image(systemName: "arrow.right")
                         .font(.system(size: 14, weight: .bold))
                 }
-                .foregroundStyle(canRecord ? Theme.Palette.void : Theme.Palette.mist)
+                .foregroundStyle(Theme.Palette.floodlight)
                 .padding(.horizontal, 17)
                 .frame(maxWidth: .infinity, minHeight: 58)
-                .background(recordButtonColor, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(recordButtonColor, lineWidth: 1)
-                }
+                .glassCard(
+                    cornerRadius: 16,
+                    tint: canRecord ? Theme.Palette.plasma : nil,
+                    interactive: canRecord,
+                    clear: true
+                )
                 .shadow(color: canRecord ? Theme.Palette.plasma.opacity(0.22) : .clear, radius: 16, y: 5)
             }
             .buttonStyle(.plain)
             .disabled(!canRecord)
             .animation(Theme.Motion.snappy, value: canRecord)
         }
-    }
-
-    private var recordButtonColor: Color {
-        canRecord ? Theme.Palette.plasma : Theme.Palette.graphite
     }
 
     private var recordButtonSubtitle: String {
@@ -436,7 +462,7 @@ struct SessionView: View {
         }
         .padding(.horizontal, 13)
         .padding(.vertical, 11)
-        .contentCard(cornerRadius: 14, elevated: true)
+        .glassCard(cornerRadius: 14, clear: true)
     }
 
     private func durationSelector(title: String, selection: Binding<Int>) -> some View {
@@ -454,7 +480,7 @@ struct SessionView: View {
                             .foregroundStyle(selected ? Theme.Palette.void : Theme.Palette.mist)
                             .frame(maxWidth: .infinity, minHeight: 30)
                             .background(
-                                selected ? Theme.Palette.ion : Color.clear,
+                                selected ? Theme.Palette.ion.opacity(0.82) : Color.clear,
                                 in: RoundedRectangle(cornerRadius: 8, style: .continuous)
                             )
                     }
@@ -462,7 +488,7 @@ struct SessionView: View {
                 }
             }
             .padding(3)
-            .background(Theme.Palette.graphite, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+            .glassCard(cornerRadius: 11, clear: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

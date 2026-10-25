@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="23094" targetRuntime="iOS.CocoaTouch" useAutolayout="YES" launchScreen="YES" colorMatched="YES" initialViewController="launch-controller">
+    <device id="retina6_12" orientation="portrait" appearance="dark"/>
+    <dependencies>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="23084"/>
+        <capability name="Safe area layout guides" minToolsVersion="9.0"/>
+        <capability name="System colors in document resources" minToolsVersion="11.0"/>
+    </dependencies>
+    <scenes>
+        <scene sceneID="launch-scene">
+            <objects>
+                <viewController id="launch-controller" sceneMemberID="viewController">
+                    <view key="view" contentMode="scaleToFill" id="launch-view">
+                        <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
+                        <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+                        <subviews>
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" image="GolfMonitorSplash" translatesAutoresizingMaskIntoConstraints="NO" id="launch-artwork">
+                                <rect key="frame" x="26" y="229" width="341" height="341"/>
+                                <constraints>
+                                    <constraint firstItem="launch-artwork" firstAttribute="width" secondItem="launch-artwork" secondAttribute="height" multiplier="1:1" id="artwork-square"/>
+                                    <constraint firstItem="launch-artwork" firstAttribute="width" secondItem="launch-safe-area" secondAttribute="height" multiplier="0.44" id="artwork-size"/>
+                                </constraints>
+                            </imageView>
+                        </subviews>
+                        <viewLayoutGuide key="safeArea" id="launch-safe-area"/>
+                        <color key="backgroundColor" red="0.0196078431" green="0.0235294118" blue="0.0274509804" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                        <constraints>
+                            <constraint firstItem="launch-artwork" firstAttribute="centerX" secondItem="launch-view" secondAttribute="centerX" id="artwork-center-x"/>
+                            <constraint firstItem="launch-artwork" firstAttribute="centerY" secondItem="launch-view" secondAttribute="centerY" id="artwork-center-y"/>
+                        </constraints>
+                    </view>
+                </viewController>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="launch-first-responder" sceneMemberID="firstResponder"/>
+            </objects>
+            <point key="canvasLocation" x="52" y="377"/>
+        </scene>
+    </scenes>
+    <resources>
+        <image name="GolfMonitorSplash" width="1024" height="1024"/>
+    </resources>
+</document>
