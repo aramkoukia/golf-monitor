@@ -3,7 +3,7 @@ import AVFoundation
 import UIKit
 import Combine
 
-// Legacy v1 Session tab — replaced by Features/Range. Delete once RangeView ships.
+// Range tab's live camera, capture controls and shot review.
 
 // MARK: - Session view
 
@@ -12,7 +12,6 @@ struct SessionView: View {
     @EnvironmentObject private var store: ShotStore
     @EnvironmentObject private var settings: SettingsStore
     @EnvironmentObject private var router: AppRouter
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     private enum Phase { case idle, countdown, recording, processing, result }
     private static let acceptedBallDistanceMeters = 0.5...2.0
@@ -43,12 +42,6 @@ struct SessionView: View {
     @State private var shotTask: Task<Void, Never>?
 
     private var clipDuration: TimeInterval { TimeInterval(clipSeconds) }
-    private var isCompactLayout: Bool { verticalSizeClass == .compact }
-    private var ballDetectorStatus: String {
-        if BundledModel.golfDetector.isAvailable { return "Ball detection: GolfDetector · Core ML" }
-        if BundledModel.cocoDetector.isAvailable { return "Ball detection: COCO sports-ball · Core ML" }
-        return "Ball detection model unavailable"
-    }
 
     var body: some View {
         NavigationStack {
@@ -58,16 +51,10 @@ struct SessionView: View {
                 case .countdown: cameraStage { countdownContent }
                 case .recording: cameraStage { recordingContent }
                 case .processing: cameraStage { processingContent }
-                case .result: resultView.background(Color(.systemBackground))
+                case .result: resultView.background(Theme.Palette.void)
                 }
             }
-            .navigationTitle("Session")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    calibrationBadge
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .onAppear {
                 UIDevice.current.beginGeneratingDeviceOrientationNotifications()
                 camera.requestPermission()
@@ -102,15 +89,14 @@ struct SessionView: View {
 
     // MARK: Full-bleed camera stage
 
-    /// Full-bleed camera with overlay content on top. The nav bar and tab bar
-    /// stay visible; the video extends under the nav bar.
+    /// Full-bleed camera with the range HUD layered over the live preview.
     private func cameraStage<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         ZStack {
             if camera.isSessionRunning {
                 CameraPreviewView(previewLayer: camera.previewLayer)
                     .ignoresSafeArea(edges: .top)
             } else {
-                Color(.systemBackground).ignoresSafeArea(edges: .top)
+                Theme.Palette.void.ignoresSafeArea(edges: .top)
             }
             content()
         }
@@ -121,6 +107,18 @@ struct SessionView: View {
     /// Idle stage: ball marker (if a ball was detected) under the controls.
     private var idleStage: some View {
         ZStack {
+            LinearGradient(
+                stops: [
+                    .init(color: Theme.Palette.void.opacity(0.58), location: 0),
+                    .init(color: .clear, location: 0.3),
+                    .init(color: Theme.Palette.void.opacity(0.18), location: 0.58),
+                    .init(color: Theme.Palette.void.opacity(0.96), location: 1),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+
             if let ball = detectedBall {
                 BallMarkerView(ball: ball)
                     .ignoresSafeArea(edges: .top)
@@ -132,247 +130,401 @@ struct SessionView: View {
 
     private var idleControls: some View {
         VStack(spacing: 0) {
-            if !isCompactLayout {
-                Text(ballDetectorStatus)
-                    .font(.caption2)
-                    .foregroundStyle(.white.opacity(0.85))
-                    .shadow(radius: 4)
-                    .padding(.bottom, 8)
-            }
+            sessionHeader
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
 
-            if !router.rangeContext.isFree, router.rangeContext.isFinished() {
-                VStack(spacing: 6) {
-                    Text("CHALLENGE COMPLETE")
-                        .font(.caption.bold())
-                    Text(router.rangeContext.subtitle)
-                        .font(.caption)
-                    Button("Finish challenge") {
-                        router.endPractice()
-                        if let activeSessionID = store.activeSessionID {
-                            store.endSession(activeSessionID)
-                        }
-                    }
-                    .font(.subheadline.bold())
-                    .buttonStyle(.borderedProminent)
-                }
-                .foregroundStyle(.white)
-                .padding(12)
-                .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
-                .padding(.bottom, 10)
-            } else if !router.rangeContext.isFree,
-                      let target = router.rangeContext.currentTarget() {
-                VStack(spacing: 3) {
-                    Text(router.rangeContext.title.uppercased())
-                        .font(.caption2.bold())
-                    Text(target.label)
-                        .font(.headline.monospacedDigit())
-                    Text(router.rangeContext.subtitle)
-                        .font(.caption)
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 12))
-                .padding(.bottom, 10)
-            }
-
-            // Club picker — pick before the shot; the result card keeps a
-            // synced copy for last-second corrections before saving.
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(Club.allCases) { club in
-                        Button {
-                            selectedClub = club
-                        } label: {
-                            Text(club.rawValue)
-                                .font(.caption.bold())
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 7)
-                                .background(selectedClub == club ? Color.accentColor : Color.black.opacity(0.35),
-                                            in: Capsule())
-                                .foregroundStyle(.white)
-                        }
-                    }
-                }
-                .padding(.horizontal)
-            }
-            .padding(.top, isCompactLayout ? 2 : 8)
+            Spacer(minLength: 28)
 
             if !camera.isSessionRunning {
-                Spacer(minLength: isCompactLayout ? 4 : 0)
-                VStack(spacing: 12) {
-                    Image(systemName: "camera.fill")
-                        .font(.largeTitle)
-                        .foregroundStyle(.secondary)
-                    Text(camera.lastError ?? "Starting camera…")
-                        .foregroundStyle(.primary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
-                    Button("Start Camera") {
-                        camera.requestPermission()
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
+                cameraConnectionCard
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 14)
             }
 
             if let err = errorMessage {
-                Text(err)
-                    .font(.callout)
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(.red.opacity(0.85), in: Capsule())
-                    .padding(.horizontal)
-                    .padding(.top, 8)
+                inlineNotice(err, color: Theme.Palette.signalRed, icon: "exclamationmark.triangle.fill")
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 12)
             }
-
-            Spacer(minLength: isCompactLayout ? 4 : 0)
 
             if let msg = detectMessage {
-                Text(msg)
-                    .font(.caption)
-                    .lineLimit(isCompactLayout ? 1 : 2)
-                    .minimumScaleFactor(0.8)
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, isCompactLayout ? 3 : 6)
-                    .background(.black.opacity(0.5), in: Capsule())
-                    .padding(.bottom, isCompactLayout ? 2 : 10)
+                inlineNotice(
+                    msg,
+                    color: detectedBall == nil ? Theme.Palette.caution : Theme.Palette.ion,
+                    icon: detectedBall == nil ? "scope" : "checkmark.circle.fill"
+                )
+                .padding(.horizontal, 20)
+                .padding(.bottom, 12)
             }
 
-            if !isCompactLayout {
-                VStack(spacing: 2) {
-                    Text(ballDetectorStatus)
-                    Text("Clip analysis: GolfDetector (if available) + blob tracking + body pose")
-                }
-                .font(.caption2)
-                .foregroundStyle(.white.opacity(0.85))
-                .shadow(radius: 4)
-                .padding(.bottom, 8)
-            }
-
-            if detectedBall == nil && !isCompactLayout {
-                Text("Detect an in-range ball (0.5–2 m) to enable recording")
-                    .font(.caption)
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(.black.opacity(0.5), in: Capsule())
-                    .padding(.bottom, 10)
-            }
-
-            durationChips(label: "Countdown", selection: $countdownSeconds, compact: isCompactLayout)
-                .padding(.bottom, isCompactLayout ? 2 : 8)
-            durationChips(label: "Clip", selection: $clipSeconds, compact: isCompactLayout)
-                .padding(.bottom, isCompactLayout ? 4 : 12)
-
-            // Keep the primary actions in one row so both remain visible in landscape.
-            HStack(spacing: 12) {
-                Button {
-                    detectBall()
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "scope")
-                        Text(isDetecting ? "Detecting…" : "Detect ball")
-                            .font(.subheadline.bold())
-                    }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, isCompactLayout ? 8 : 12)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .shadow(color: .black.opacity(0.25), radius: 6, y: 3)
-                }
-                .disabled(isDetecting || !camera.isAuthorized || !camera.isSessionRunning)
-
-                Button {
-                    camera.lockFocusAndExposure()
-                    startShot()
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: "record.circle.fill")
-                        Text("Record Shot")
-                            .font(.title3.bold())
-                    }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, isCompactLayout ? 18 : 26)
-                    .padding(.vertical, isCompactLayout ? 8 : 13)
-                    .background(canRecord ? Color.accentColor : Color.gray,
-                                in: Capsule())
-                    .shadow(color: .black.opacity(0.35), radius: 10, y: 4)
-                }
-                .disabled(!canRecord)
-            }
-            .padding(.bottom, isCompactLayout ? 6 : 18)
+            shotControlDeck
         }
     }
 
-    /// iPhone-camera-style duration picker: a row of tappable pills
-    /// (3/5/10/15 s) in a dark capsule — no dropdowns.
-    private func durationChips(label: String, selection: Binding<Int>, compact: Bool = false) -> some View {
-        HStack(spacing: 8) {
-            Text(label.uppercased())
-                .font(.caption2.bold())
-                .foregroundStyle(.white)
-                .shadow(radius: 4)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .frame(width: compact ? 72 : 80, alignment: .trailing)
-            HStack(spacing: 4) {
-                ForEach([3, 5, 10, 15], id: \.self) { sec in
-                    Button {
-                        selection.wrappedValue = sec
-                    } label: {
-                        Text("\(sec)")
-                            .font(.caption.bold())
-                            .frame(width: 30, height: compact ? 28 : 32)
-                            .background(selection.wrappedValue == sec ? Color.white : Color.white.opacity(0.15), in: Circle())
-                            .foregroundStyle(selection.wrappedValue == sec ? .black : .white)
+    private var sessionHeader: some View {
+        HStack(alignment: .center, spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .fill(Theme.Palette.plasma.opacity(0.16))
+                    .frame(width: 44, height: 44)
+                Image(systemName: "figure.golf")
+                    .font(.system(size: 21, weight: .semibold))
+                    .foregroundStyle(Theme.Palette.plasma)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("GOLF MONITOR")
+                    .font(Theme.Font.label)
+                    .tracking(1.4)
+                    .foregroundStyle(Theme.Palette.floodlight)
+                Text("RANGE SESSION")
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .tracking(1)
+                    .foregroundStyle(Theme.Palette.mist)
+            }
+
+            Spacer(minLength: 8)
+
+            HStack(spacing: 7) {
+                Circle()
+                    .fill(camera.isSessionRunning ? Theme.Palette.ion : Theme.Palette.caution)
+                    .frame(width: 7, height: 7)
+                    .shadow(color: camera.isSessionRunning ? Theme.Palette.ion.opacity(0.8) : .clear, radius: 5)
+                Text(camera.isSessionRunning ? "LIVE" : "CONNECTING")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .tracking(0.6)
+                    .foregroundStyle(Theme.Palette.floodlight)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .glassCapsule(clear: true)
+        }
+        .padding(12)
+        .glassCard(cornerRadius: 20, clear: true)
+    }
+
+    private var cameraConnectionCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Image(systemName: "camera.fill")
+                    .font(.title3)
+                    .foregroundStyle(Theme.Palette.caution)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(camera.lastError == nil ? "Warming up the viewfinder" : "Camera unavailable")
+                        .font(Theme.Font.headline)
+                        .foregroundStyle(Theme.Palette.floodlight)
+                    Text(camera.lastError ?? "Your live range view will appear here.")
+                        .font(Theme.Font.caption)
+                        .foregroundStyle(Theme.Palette.mist)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+
+            Button("Start camera", systemImage: "arrow.clockwise") {
+                camera.requestPermission()
+            }
+            .font(.subheadline.bold())
+            .foregroundStyle(Theme.Palette.void)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(Theme.Palette.plasma, in: Capsule())
+        }
+        .padding(16)
+        .contentCard(cornerRadius: 20, elevated: true)
+    }
+
+    private var shotControlDeck: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            challengeCard
+
+            HStack {
+                CapsLabel("Shot setup")
+                Spacer()
+                HStack(spacing: 6) {
+                    Image(systemName: detectedBall == nil ? "scope" : "checkmark.circle.fill")
+                    Text(detectedBall == nil ? "BALL NOT LOCKED" : "BALL LOCKED")
+                }
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .tracking(0.4)
+                .foregroundStyle(detectedBall == nil ? Theme.Palette.caution : Theme.Palette.ion)
+            }
+
+            clubSelector
+
+            HStack(spacing: 12) {
+                durationSelector(title: "COUNTDOWN", selection: $countdownSeconds)
+                durationSelector(title: "CLIP", selection: $clipSeconds)
+            }
+
+            shotActions
+        }
+        .padding(16)
+        .background {
+            UnevenRoundedRectangle(topLeadingRadius: 26, topTrailingRadius: 26)
+                .fill(Theme.Palette.void.opacity(0.94))
+                .overlay(alignment: .top) {
+                    Rectangle()
+                        .fill(LinearGradient(colors: [.clear, Theme.Palette.plasma.opacity(0.45), .clear],
+                                             startPoint: .leading, endPoint: .trailing))
+                        .frame(height: 1)
+                }
+                .ignoresSafeArea(edges: .bottom)
+        }
+    }
+
+    @ViewBuilder
+    private var challengeCard: some View {
+        if !router.rangeContext.isFree, router.rangeContext.isFinished() {
+            VStack(alignment: .leading, spacing: 10) {
+                CapsLabel("Challenge complete", color: Theme.Palette.ion)
+                Text(router.rangeContext.subtitle)
+                    .font(Theme.Font.body)
+                    .foregroundStyle(Theme.Palette.floodlight)
+                Button("Finish challenge", systemImage: "checkmark") {
+                    router.endPractice()
+                    if let activeSessionID = store.activeSessionID {
+                        store.endSession(activeSessionID)
                     }
                 }
+                .font(.subheadline.bold())
+                .foregroundStyle(Theme.Palette.void)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(Theme.Palette.ion, in: Capsule())
             }
-            .padding(4)
-            .background(.black.opacity(0.35), in: Capsule())
-            Text("sec")
-                .font(.caption2)
-                .foregroundStyle(.white.opacity(0.8))
-                .shadow(radius: 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+            .contentCard(cornerRadius: 18, elevated: true)
+        } else if !router.rangeContext.isFree,
+                  let target = router.rangeContext.currentTarget() {
+            HStack(spacing: 12) {
+                Image(systemName: "target")
+                    .font(.title3)
+                    .foregroundStyle(Theme.Palette.plasma)
+                VStack(alignment: .leading, spacing: 3) {
+                    CapsLabel(router.rangeContext.title, color: Theme.Palette.plasma)
+                    Text(target.label)
+                        .font(Theme.Font.headline)
+                        .foregroundStyle(Theme.Palette.floodlight)
+                }
+                Spacer()
+                Text(router.rangeContext.subtitle)
+                    .font(Theme.Font.caption)
+                    .foregroundStyle(Theme.Palette.mist)
+                    .multilineTextAlignment(.trailing)
+                    .lineLimit(2)
+            }
+            .padding(14)
+            .contentCard(cornerRadius: 18)
         }
+    }
+
+    private var clubSelector: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(Club.allCases) { club in
+                    let selected = selectedClub == club
+                    Button {
+                        Haptics.select()
+                        selectedClub = club
+                    } label: {
+                        Text(club.rawValue)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(selected ? Theme.Palette.void : Theme.Palette.floodlight)
+                            .padding(.horizontal, 15)
+                            .frame(height: 38)
+                            .background(selected ? Theme.Palette.plasma : Theme.Palette.graphite, in: Capsule())
+                            .overlay {
+                                Capsule().strokeBorder(
+                                    selected ? Theme.Palette.plasma : Theme.Palette.hairline,
+                                    lineWidth: 1
+                                )
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                }
+            }
+        }
+        .contentMargins(.trailing, 2)
+    }
+
+    private var shotActions: some View {
+        HStack(spacing: 10) {
+            Button {
+                Haptics.tap()
+                detectBall()
+            } label: {
+                VStack(spacing: 5) {
+                    if isDetecting {
+                        ProgressView()
+                            .tint(Theme.Palette.floodlight)
+                            .frame(height: 19)
+                    } else {
+                        Image(systemName: "scope")
+                            .font(.system(size: 17, weight: .semibold))
+                            .frame(height: 19)
+                    }
+                    Text(isDetecting ? "SCANNING" : "FIND BALL")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .tracking(0.5)
+                }
+                .foregroundStyle(Theme.Palette.floodlight)
+                .frame(width: 82, height: 58)
+                .glassCard(cornerRadius: 16, interactive: true, clear: true)
+            }
+            .buttonStyle(.plain)
+            .disabled(isDetecting || !camera.isAuthorized || !camera.isSessionRunning)
+
+            Button {
+                Haptics.impact(.medium)
+                camera.lockFocusAndExposure()
+                startShot()
+            } label: {
+                HStack(spacing: 11) {
+                    Image(systemName: "record.circle.fill")
+                        .font(.system(size: 20, weight: .semibold))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("RECORD SHOT")
+                            .font(.system(size: 14, weight: .black))
+                            .tracking(0.8)
+                        Text(recordButtonSubtitle)
+                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                            .tracking(0.25)
+                            .opacity(0.8)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 14, weight: .bold))
+                }
+                .foregroundStyle(canRecord ? Theme.Palette.void : Theme.Palette.mist)
+                .padding(.horizontal, 17)
+                .frame(maxWidth: .infinity, minHeight: 58)
+                .background(recordButtonColor, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(recordButtonColor, lineWidth: 1)
+                }
+                .shadow(color: canRecord ? Theme.Palette.plasma.opacity(0.22) : .clear, radius: 16, y: 5)
+            }
+            .buttonStyle(.plain)
+            .disabled(!canRecord)
+            .animation(Theme.Motion.snappy, value: canRecord)
+        }
+    }
+
+    private var recordButtonColor: Color {
+        canRecord ? Theme.Palette.plasma : Theme.Palette.graphite
+    }
+
+    private var recordButtonSubtitle: String {
+        canRecord ? "\(Int(clipDuration)) SEC · \(Int(camera.selectedFPS)) FPS" : "FIND THE BALL TO UNLOCK"
+    }
+
+    private func inlineNotice(_ message: String, color: Color, icon: String) -> some View {
+        HStack(alignment: .top, spacing: 9) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(color)
+            Text(message)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Theme.Palette.floodlight)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 13)
+        .padding(.vertical, 11)
+        .contentCard(cornerRadius: 14, elevated: true)
+    }
+
+    private func durationSelector(title: String, selection: Binding<Int>) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            CapsLabel(title, color: Theme.Palette.mist)
+            HStack(spacing: 3) {
+                ForEach([3, 5, 10, 15], id: \.self) { seconds in
+                    let selected = selection.wrappedValue == seconds
+                    Button {
+                        Haptics.select()
+                        selection.wrappedValue = seconds
+                    } label: {
+                        Text("\(seconds)")
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .foregroundStyle(selected ? Theme.Palette.void : Theme.Palette.mist)
+                            .frame(maxWidth: .infinity, minHeight: 30)
+                            .background(
+                                selected ? Theme.Palette.ion : Color.clear,
+                                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(3)
+            .background(Theme.Palette.graphite, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: Countdown / recording / processing overlays
 
     private var countdownContent: some View {
-        VStack {
+        VStack(spacing: 0) {
+            sessionHeader
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
             Spacer()
-            Text("\(countdownValue)")
-                .font(.system(size: 120, weight: .heavy))
-                .monospacedDigit()
-                .foregroundStyle(.white)
-                .shadow(radius: 12)
-            Text("Get ready — swing on zero")
-                .foregroundStyle(.white)
-                .shadow(radius: 6)
+            VStack(spacing: 12) {
+                CapsLabel("Get set", color: Theme.Palette.plasma)
+                Text("\(countdownValue)")
+                    .font(Theme.Font.mega(150))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.Palette.floodlight)
+                    .contentTransition(.numericText(value: Double(countdownValue)))
+                    .shadow(color: Theme.Palette.plasma.opacity(0.35), radius: 30)
+                    .id(countdownValue)
+                    .transition(.scale.combined(with: .opacity))
+                Text("Swing on zero")
+                    .font(Theme.Font.headline)
+                    .foregroundStyle(Theme.Palette.mist)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 38)
+            .contentCard(cornerRadius: 28, elevated: true)
+            .padding(.horizontal, 28)
             Spacer()
             cancelShotButton
                 .padding(.bottom, 24)
         }
+        .animation(Theme.Motion.snappy, value: countdownValue)
     }
 
     private var recordingContent: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 0) {
+            sessionHeader
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
             Spacer()
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(.red)
-                    .frame(width: 12, height: 12)
-                Text("Recording… swing now!")
-                    .font(.title3.bold())
-                    .foregroundStyle(.white)
+            VStack(spacing: 14) {
+                HStack(spacing: 9) {
+                    Circle()
+                        .fill(Theme.Palette.signalRed)
+                        .frame(width: 9, height: 9)
+                        .shadow(color: Theme.Palette.signalRed.opacity(0.85), radius: 8)
+                    CapsLabel("Recording live", color: Theme.Palette.signalRed)
+                }
+                Text("Swing now")
+                    .font(Theme.Font.display)
+                    .foregroundStyle(Theme.Palette.floodlight)
+                Text("Capturing \(Int(clipDuration)) seconds · \(Int(camera.selectedFPS)) FPS")
+                    .font(Theme.Font.mono)
+                    .foregroundStyle(Theme.Palette.mist)
             }
-            .shadow(radius: 6)
-            Text("Capturing \(Int(clipDuration))s at high frame rate")
-                .foregroundStyle(.white.opacity(0.85))
-                .shadow(radius: 6)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 36)
+            .contentCard(cornerRadius: 26, elevated: true)
+            .padding(.horizontal, 24)
             Spacer()
             cancelShotButton
                 .padding(.bottom, 24)
@@ -382,23 +534,36 @@ struct SessionView: View {
     private var cancelShotButton: some View {
         Button("Cancel shot", systemImage: "xmark.circle.fill", action: cancelShot)
             .font(.subheadline.bold())
-            .buttonStyle(.bordered)
-            .tint(.white)
+            .foregroundStyle(Theme.Palette.floodlight)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+            .glassCapsule(interactive: true, clear: true)
     }
 
     private var processingContent: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 0) {
+            sessionHeader
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
             Spacer()
-            ProgressView()
-                .scaleEffect(1.5)
-                .tint(.white)
-            Text(processingStatus)
-                .font(.title3.bold())
-                .foregroundStyle(.white)
-                .shadow(radius: 6)
-            Text("Analyzing ball track and pose…")
-                .foregroundStyle(.white.opacity(0.85))
-                .shadow(radius: 6)
+            VStack(spacing: 16) {
+                ProgressView()
+                    .controlSize(.large)
+                    .tint(Theme.Palette.plasma)
+                CapsLabel("Shot intelligence", color: Theme.Palette.plasma)
+                Text(processingStatus)
+                    .font(Theme.Font.headline)
+                    .foregroundStyle(Theme.Palette.floodlight)
+                    .multilineTextAlignment(.center)
+                Text("Tracking flight · reading swing · building your shot")
+                    .font(Theme.Font.caption)
+                    .foregroundStyle(Theme.Palette.mist)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(26)
+            .contentCard(cornerRadius: 24, elevated: true)
+            .padding(.horizontal, 24)
             Spacer()
         }
     }
@@ -407,61 +572,90 @@ struct SessionView: View {
 
     private var resultView: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .center) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        CapsLabel("Range session", color: Theme.Palette.plasma)
+                        Text("Shot review")
+                            .font(Theme.Font.display)
+                            .foregroundStyle(Theme.Palette.floodlight)
+                    }
+                    Spacer()
+                    Text(selectedClub.rawValue.uppercased())
+                        .font(Theme.Font.mono)
+                        .foregroundStyle(Theme.Palette.mist)
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 8)
+                        .glassCapsule(clear: true)
+                }
+
                 if let img = tracerImage {
                     Image(uiImage: img)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .strokeBorder(Theme.Palette.hairline, lineWidth: 1)
+                        }
                         .overlay(alignment: .topTrailing) {
                             Button {
                                 showShare = true
                             } label: {
                                 Image(systemName: "square.and.arrow.up")
-                                    .padding(10)
-                                    .background(.ultraThinMaterial, in: Circle())
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(Theme.Palette.floodlight)
+                                    .frame(width: 40, height: 40)
+                                    .glassCapsule(interactive: true, clear: true)
                             }
                             .padding(8)
                         }
                 }
 
                 Text(analysisOutput?.analysis.pipeline ?? "Swing analysis")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundStyle(Theme.Palette.dim)
 
                 if let m = metrics {
-                    // Hero: ball speed
-                    VStack(spacing: 2) {
-                        Text("BALL SPEED")
-                            .font(.caption.bold())
-                            .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 4) {
+                        CapsLabel("Ball speed", color: Theme.Palette.mist)
                         Text(formatSpeed(mph: m.ballSpeedMph, settings: settings))
-                            .font(.system(size: 52, weight: .heavy))
+                            .font(Theme.Font.hero(76))
                             .monospacedDigit()
+                            .foregroundStyle(Theme.Palette.floodlight)
+                            .minimumScaleFactor(0.65)
+                            .lineLimit(1)
+                        Text("MEASURED FROM YOUR SWING")
+                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                            .tracking(0.8)
+                            .foregroundStyle(Theme.Palette.ion)
                     }
-                    .padding(.top, 4)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(20)
+                    .contentCard(cornerRadius: 22, elevated: true)
 
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                        metricTile("Carry ~", formatDistance(yards: m.carryYards, settings: settings))
+                        metricTile("Carry · estimated", formatDistance(yards: m.carryYards, settings: settings))
                         metricTile("Club Speed", formatSpeed(mph: m.clubSpeedMph, settings: settings))
                         metricTile("Smash Factor", m.smashFactor > 0 ? String(format: "%.2f", m.smashFactor) : "—")
                         metricTile("Launch Angle", String(format: "%.1f°", m.launchAngleDeg))
-                        metricTile("Offline ~", formatOffline(yards: m.offlineYards, settings: settings))
-                        metricTile("Apex ~", formatDistance(yards: m.apexYards, settings: settings))
+                        metricTile("Offline · estimate", formatOffline(yards: m.offlineYards, settings: settings))
+                        metricTile("Apex · estimated", formatDistance(yards: m.apexYards, settings: settings))
                         metricTile("Hang Time", String(format: "~%.1fs", m.hangTimeS))
                         metricTile("Tempo", formatTempo(m.tempoRatio))
                     }
-                    .padding(.horizontal)
 
-                    Text("Spin: n/a — phone cameras can't measure spin")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Text("Spin isn’t measured by a phone camera. Carry, apex and offline are estimates.")
+                        .font(Theme.Font.caption)
+                        .foregroundStyle(Theme.Palette.mist)
+                        .padding(.horizontal, 2)
 
                     Button {
                         showMetricGuide = true
                     } label: {
                         Label("What these numbers mean", systemImage: "info.circle")
-                            .font(.subheadline)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Theme.Palette.plasma)
                     }
                     .sheet(isPresented: $showMetricGuide) {
                         MetricGuideView()
@@ -469,7 +663,7 @@ struct SessionView: View {
 
                     // Club selector
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Club").font(.headline)
+                        CapsLabel("Club", color: Theme.Palette.mist)
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
                                 ForEach(Club.allCases) { club in
@@ -480,9 +674,9 @@ struct SessionView: View {
                                             .font(.subheadline.bold())
                                             .padding(.horizontal, 14)
                                             .padding(.vertical, 8)
-                                            .background(selectedClub == club ? Color.accentColor : Color.secondary.opacity(0.15),
+                                            .background(selectedClub == club ? Theme.Palette.plasma : Theme.Palette.graphite,
                                                         in: Capsule())
-                                            .foregroundStyle(selectedClub == club ? .white : .primary)
+                                            .foregroundStyle(selectedClub == club ? Theme.Palette.void : Theme.Palette.floodlight)
                                     }
                                 }
                             }
@@ -495,19 +689,27 @@ struct SessionView: View {
                 if let err = errorMessage {
                     Text(err)
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.Palette.caution)
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal)
+                        .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentCard(cornerRadius: 16)
                 }
 
                 if let feedback = practiceFeedback {
-                    VStack(spacing: 4) {
-                        Text(feedback.headline).font(.headline)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(feedback.headline)
+                            .font(.headline)
+                            .foregroundStyle(Theme.Palette.floodlight)
                         if !feedback.detail.isEmpty {
-                            Text(feedback.detail).font(.subheadline).foregroundStyle(.secondary)
+                            Text(feedback.detail)
+                                .font(.subheadline)
+                                .foregroundStyle(Theme.Palette.mist)
                         }
                     }
-                    .padding(.horizontal)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(16)
+                    .contentCard(cornerRadius: 16)
                 }
 
                 if analysisOutput != nil {
@@ -515,14 +717,14 @@ struct SessionView: View {
                         saveShot()
                     } label: {
                         Text(savedConfirmation ? "Saved ✓" : "Save Shot")
-                            .font(.title3.bold())
+                            .font(.system(size: 14, weight: .black))
+                            .tracking(0.8)
                             .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 16))
-                            .foregroundStyle(.white)
+                            .frame(height: 56)
+                            .background(Theme.Palette.plasma, in: RoundedRectangle(cornerRadius: 16))
+                            .foregroundStyle(Theme.Palette.void)
                     }
                     .disabled(savedConfirmation)
-                    .padding(.horizontal)
                 }
 
                 if savedConfirmation, let savedShotID {
@@ -531,38 +733,47 @@ struct SessionView: View {
                     } label: {
                         Label("Open in Swing Studio", systemImage: "play.rectangle")
                             .font(.headline)
+                            .foregroundStyle(Theme.Palette.ion)
                             .frame(maxWidth: .infinity)
-                            .padding()
+                            .frame(height: 54)
+                            .contentCard(cornerRadius: 16)
                     }
-                    .padding(.horizontal)
                 }
 
-                Button("Record another") { reset() }
-                    .padding(.bottom, 24)
+                Button(action: reset) {
+                    Label("Record another shot", systemImage: "arrow.counterclockwise")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(Theme.Palette.mist)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                }
             }
+            .padding(.horizontal, 20)
+            .padding(.top, 22)
+            .padding(.bottom, 32)
         }
+        .scrollIndicators(.hidden)
+        .background(Theme.Palette.void)
     }
 
     private func metricTile(_ label: String, _ value: String) -> some View {
-        VStack(spacing: 4) {
+        VStack(alignment: .leading, spacing: 7) {
             Text(label.uppercased())
-                .font(.caption2.bold())
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.system(size: 26, weight: .bold))
-                .monospacedDigit()
+                .font(Theme.Font.label)
+                .tracking(0.5)
+                .foregroundStyle(Theme.Palette.mist)
+                .lineLimit(1)
                 .minimumScaleFactor(0.7)
+            Text(value)
+                .font(Theme.Font.metric(27))
+                .monospacedDigit()
+                .foregroundStyle(Theme.Palette.floodlight)
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
-        .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
-    }
-
-    private var calibrationBadge: some View {
-        Label(detectedBall == nil ? "Detect ball" : "Ball ready",
-              systemImage: detectedBall == nil ? "scope" : "checkmark.circle.fill")
-            .font(.caption)
-            .foregroundStyle(detectedBall == nil ? .orange : .green)
+        .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
+        .padding(14)
+        .contentCard(cornerRadius: 16)
     }
 
     // MARK: Flow
