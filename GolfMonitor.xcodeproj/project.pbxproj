@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		2445BE693080667D0025FE4E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2445BE683080667D0025FE4E /* Assets.xcassets */; };
 		2445BE6B308D53CB0025FE4E /* yolov8n 2.mlpackage in Sources */ = {isa = PBXBuildFile; fileRef = 2445BE6A308D53CB0025FE4E /* yolov8n 2.mlpackage */; };
+		B10000000000000000000001 /* GolfBallDetector.mlpackage in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000002 /* GolfBallDetector.mlpackage */; };
 		A10000000000000000000020 /* GolfMonitorApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000010 /* GolfMonitorApp.swift */; };
 		A10000000000000000000021 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000011 /* Models.swift */; };
 		A10000000000000000000022 /* CameraManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000012 /* CameraManager.swift */; };
@@ -22,6 +23,7 @@
 /* Begin PBXFileReference section */
 		2445BE683080667D0025FE4E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		2445BE6A308D53CB0025FE4E /* yolov8n 2.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = "yolov8n 2.mlpackage"; sourceTree = "<group>"; };
+		B10000000000000000000002 /* GolfBallDetector.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = GolfBallDetector.mlpackage; sourceTree = "<group>"; };
 		A10000000000000000000010 /* GolfMonitorApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GolfMonitorApp.swift; sourceTree = "<group>"; };
 		A10000000000000000000011 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		A10000000000000000000012 /* CameraManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraManager.swift; sourceTree = "<group>"; };
@@ -48,6 +50,7 @@
 		A10000000000000000000002 = {
 			isa = PBXGroup;
 			children = (
+				B10000000000000000000002 /* GolfBallDetector.mlpackage */,
 				2445BE6A308D53CB0025FE4E /* yolov8n 2.mlpackage */,
 				A10000000000000000000003 /* GolfMonitor */,
 				A10000000000000000000004 /* Products */,
@@ -153,6 +156,7 @@
 				A10000000000000000000026 /* SessionView.swift in Sources */,
 				A10000000000000000000027 /* ShotHistoryView.swift in Sources */,
 				2445BE6B308D53CB0025FE4E /* yolov8n 2.mlpackage in Sources */,
+				B10000000000000000000001 /* GolfBallDetector.mlpackage in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

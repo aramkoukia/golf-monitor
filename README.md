@@ -131,10 +131,13 @@ GolfMonitor/
 - **Spin is n/a** by design; carry uses club-typical spin assumptions.
 - **No automatic swing detection** — you press Record and swing within the
   3-2-1 countdown; the clip is a fixed 2 s.
-- **Calibration uses the bundled YOLOv8n Core ML model only.** The app decodes
-  its raw COCO output tensor and looks for the "sports ball" class; this generic
-  model is not golf-ball-specific, so it may miss small golf balls. Failures are
-  shown instead of silently falling back to brightness detection.
+- **Calibration uses the bundled golf-ball-specific YOLOv8n Core ML model only.**
+  It was fine-tuned for one epoch on the Roboflow GolfBall v1 dataset (CC BY 4.0;
+  [dataset](https://universe.roboflow.com/anna-gaming/golfball)). On the held-out
+  dataset test split it scored 0.696 mAP@0.5 and 0.342 mAP@0.5:0.95. This is an
+  initial CPU-training experiment, not a production-quality result; the model
+  may not generalize to your camera, range, or ball size. Failures are shown
+  instead of silently falling back to brightness detection.
 - **Shot tracking is still brightness/blob-based** across the recorded frames;
   Core ML is not yet used to track the moving ball or calculate shot metrics.
 - **History is local JSON**, no cloud sync.
@@ -143,8 +146,9 @@ GolfMonitor/
 
 ## Ideas for v2
 
-- Train and integrate a golf-ball-specific Core ML detector, then use it for
-  ball tracking throughout the recorded clip
+- Continue golf-ball model training on a GPU and validate it on images captured
+  by the app at the intended 0.5–2 m range
+- Use the detector for ball tracking throughout the recorded clip
 - Down-the-line camera mode for club path, face angle, true offline
 - Audio-triggered capture (impact sound starts the 2 s buffer)
 - Marked-ball spin estimation with higher-frame-rate capture
