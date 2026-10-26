@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		B20000000000000000000001 /* GolfMonitorWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = B20000000000000000000003 /* GolfMonitorWatch.app */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		B2000000000000000000000E /* GolfMonitorWatchExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = B20000000000000000000010 /* GolfMonitorWatchExtension.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		D20000000000000000000001 /* WatchCaptureBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000003 /* WatchCaptureBridge.swift */; };
+		D20000000000000000000002 /* SessionVideoProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000004 /* SessionVideoProcessor.swift */; };
 		C10000000000000000000001 /* GolfBallDetector.mlpackage in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000002 /* GolfBallDetector.mlpackage */; };
 /* End PBXBuildFile section */
 
@@ -66,6 +68,8 @@
 		B10000000000000000000025 /* GolfMonitorTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GolfMonitorTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B20000000000000000000003 /* GolfMonitorWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GolfMonitorWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B20000000000000000000010 /* GolfMonitorWatchExtension.appex */ = {isa = PBXFileReference; explicitFileType = wrapper.app-extension; includeInIndex = 0; path = GolfMonitorWatchExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		D20000000000000000000003 /* WatchCaptureBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GolfMonitor/Core/Capture/WatchCaptureBridge.swift; sourceTree = "<group>"; };
+		D20000000000000000000004 /* SessionVideoProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GolfMonitor/Core/Capture/SessionVideoProcessor.swift; sourceTree = "<group>"; };
 		C10000000000000000000002 /* GolfBallDetector.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = GolfBallDetector.mlpackage; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -74,6 +78,8 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
+				Core/Capture/SessionVideoProcessor.swift,
+				Core/Capture/WatchCaptureBridge.swift,
 			);
 			target = A10000000000000000000005 /* GolfMonitor */;
 		};
@@ -146,6 +152,8 @@
 			isa = PBXGroup;
 			children = (
 				C10000000000000000000002 /* GolfBallDetector.mlpackage */,
+				D20000000000000000000003 /* WatchCaptureBridge.swift */,
+				D20000000000000000000004 /* SessionVideoProcessor.swift */,
 				B10000000000000000000010 /* GolfMonitor */,
 				B10000000000000000000011 /* GolfMonitorTests */,
 				B20000000000000000000004 /* GolfMonitorWatchExtension */,
@@ -340,6 +348,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D20000000000000000000001 /* WatchCaptureBridge.swift in Sources */,
+				D20000000000000000000002 /* SessionVideoProcessor.swift in Sources */,
 				C10000000000000000000001 /* GolfBallDetector.mlpackage in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -593,7 +603,6 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "GolfMonitor Watch";
 				INFOPLIST_KEY_WKApplication = YES;
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.example.golfmonitor;
-				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.golfmonitor.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -612,7 +621,6 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "GolfMonitor Watch";
 				INFOPLIST_KEY_WKApplication = YES;
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.example.golfmonitor;
-				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.golfmonitor.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
