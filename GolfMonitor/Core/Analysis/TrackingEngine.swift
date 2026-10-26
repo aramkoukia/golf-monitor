@@ -110,7 +110,7 @@ final class TrackingEngine {
     func track(videoURL: URL, fps: Double, expectedBallDiameterPx: Double?) -> TrackingResult {
         var result = TrackingResult(fps: fps)
 
-        let asset = AVAsset(url: videoURL)
+        let asset = AVURLAsset(url: videoURL)
         // tracks(withMediaType:) is deprecated since iOS 16 — load the tracks
         // asynchronously and bridge back synchronously. This method already
         // runs on a background queue, so the semaphore can't deadlock the UI.

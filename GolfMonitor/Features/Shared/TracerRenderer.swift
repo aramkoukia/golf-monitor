@@ -6,13 +6,13 @@ import UIKit
 /// Extracts a frame from the clip and draws the tracked ball trajectory over it.
 enum TracerRenderer {
 
-    static func makeTracerImage(videoURL: URL, tracking: TrackingResult) -> UIImage? {
+    static func makeTracerImage(videoURL: URL, tracking: TrackingResult) async -> UIImage? {
         guard !tracking.ballPoints.isEmpty else { return nil }
         // Show a frame a bit after impact so the ball trail is visible.
         let impactTime = tracking.impactBallIndex
             .flatMap { tracking.ballPoints.indices.contains($0) ? tracking.ballPoints[$0].time : nil } ?? 0
         let frameTime = min(impactTime + 0.12, tracking.ballPoints.last?.time ?? 0.5)
-        guard let base = frameImage(videoURL: videoURL, at: frameTime),
+        guard let base = await frameImage(videoURL: videoURL, at: frameTime),
               let cg = base.cgImage
         else { return nil }
 
@@ -62,12 +62,11 @@ enum TracerRenderer {
         }
     }
 
-    private static func frameImage(videoURL: URL, at seconds: Double) -> UIImage? {
-        let asset = AVAsset(url: videoURL)
-        let generator = AVAssetImageGenerator(asset: asset)
+    private static func frameImage(videoURL: URL, at seconds: Double) async -> UIImage? {
+        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: videoURL))
         generator.appliesPreferredTrackTransform = true
         let time = CMTime(seconds: seconds, preferredTimescale: 600)
-        guard let cg = try? generator.copyCGImage(at: time, actualTime: nil) else { return nil }
+        guard let cg = await generator.frameImage(at: time) else { return nil }
         return UIImage(cgImage: cg)
     }
 }

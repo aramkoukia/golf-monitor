@@ -81,7 +81,7 @@ final class SwingAnalyzer {
             analysis.clubTrack = tracking.clubPoints.map { TrackPoint(t: $0.time, x: $0.x / w, y: $0.y / h) }
             if let i = tracking.impactBallIndex, i < tracking.ballPoints.count { analysis.impactTime = tracking.ballPoints[i].time }
             progress(0.6, "Reading body pose")
-            let (poses, size, duration) = Self.interimPoses(videoURL: request.clipURL)
+            let (poses, size, duration) = try await Self.interimPoses(videoURL: request.clipURL)
             analysis.poses = poses
             if size.width > 0 {
                 analysis.frameWidth = Int(size.width)
@@ -104,8 +104,11 @@ final class SwingAnalyzer {
                 ? "GolfDetector-assisted v1 blob tracker"
                 : "v1 blob tracker"
             analysis.pipeline = "\(ballTracker) + \(PoseEstimatorFactory.make()?.name ?? "no pose")"
-            let tracer = TracerRenderer.makeTracerImage(videoURL: request.clipURL, tracking: tracking)
-            let poster = Self.posterFrame(videoURL: request.clipURL, at: analysis.marker(.address)?.t ?? 0) ?? tracer
+            let tracer = await TracerRenderer.makeTracerImage(videoURL: request.clipURL, tracking: tracking)
+            let poster = await Self.posterFrame(
+                videoURL: request.clipURL,
+                at: analysis.marker(.address)?.t ?? 0
+            ) ?? tracer
             progress(1, "Done")
             return AnalysisOutput(metrics: metrics, metricsError: failure, analysis: analysis,
                                   thumbnail: poster, tracerImage: tracer)
@@ -115,20 +118,20 @@ final class SwingAnalyzer {
     // MARK: Interim helpers (replaced by the analysis workstream)
 
     /// Pose every 8th frame (≈30 fps at 240 fps capture).
-    private static func interimPoses(videoURL: URL) -> ([PoseSample], CGSize, Double) {
+    private static func interimPoses(videoURL: URL) async throws -> ([PoseSample], CGSize, Double) {
         guard let estimator = PoseEstimatorFactory.make() else { return ([], .zero, 0) }
         let asset = AVURLAsset(url: videoURL)
         let gen = AVAssetImageGenerator(asset: asset)
         gen.appliesPreferredTrackTransform = true
         gen.requestedTimeToleranceBefore = .zero
         gen.requestedTimeToleranceAfter = .zero
-        let duration = asset.duration.seconds
+        let duration = try await asset.load(.duration).seconds
         guard duration.isFinite, duration > 0 else { return ([], .zero, 0) }
         var poses: [PoseSample] = []
         var size = CGSize.zero
         var t = 0.0
         while t < duration {
-            if let cg = try? gen.copyCGImage(at: CMTime(seconds: t, preferredTimescale: 600), actualTime: nil) {
+            if let cg = await gen.frameImage(at: CMTime(seconds: t, preferredTimescale: 600)) {
                 size = CGSize(width: cg.width, height: cg.height)
                 if let p = estimator.pose(in: CIImage(cgImage: cg), t: t) { poses.append(p) }
             }
@@ -172,12 +175,18 @@ final class SwingAnalyzer {
         ]
     }
 
-    private static func posterFrame(videoURL: URL, at t: Double) -> UIImage? {
+    private static func posterFrame(videoURL: URL, at t: Double) async -> UIImage? {
         let gen = AVAssetImageGenerator(asset: AVURLAsset(url: videoURL))
         gen.appliesPreferredTrackTransform = true
         gen.maximumSize = CGSize(width: 720, height: 720)
-        guard let cg = try? gen.copyCGImage(at: CMTime(seconds: t, preferredTimescale: 600), actualTime: nil) else { return nil }
+        guard let cg = await gen.frameImage(at: CMTime(seconds: t, preferredTimescale: 600)) else { return nil }
         return UIImage(cgImage: cg)
+    }
+}
+
+extension AVAssetImageGenerator {
+    func frameImage(at time: CMTime) async -> CGImage? {
+        try? await image(at: time).image
     }
 }
 

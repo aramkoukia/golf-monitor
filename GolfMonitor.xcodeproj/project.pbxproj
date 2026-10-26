@@ -599,6 +599,7 @@
 		B2000000000000000000000B /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				COPY_PHASE_STRIP = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "GolfMonitor Watch";
 				INFOPLIST_KEY_WKApplication = YES;
@@ -617,6 +618,7 @@
 		B2000000000000000000000C /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				COPY_PHASE_STRIP = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "GolfMonitor Watch";
 				INFOPLIST_KEY_WKApplication = YES;
@@ -636,6 +638,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
+				COPY_PHASE_STRIP = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = GolfMonitorWatchExtension/Info.plist;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.golfmonitor.watchkitapp.watchkitextension;
@@ -653,6 +656,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
+				COPY_PHASE_STRIP = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = GolfMonitorWatchExtension/Info.plist;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.golfmonitor.watchkitapp.watchkitextension;
