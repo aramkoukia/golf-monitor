@@ -15,6 +15,12 @@ measure well, estimates the rest, and tells you which is which.
    - Set **Team** to your Apple ID (Xcode → Settings → Accounts to add it).
    - Change the **Bundle Identifier** from `com.example.golfmonitor` to something
      unique, e.g. `com.yourname.golfmonitor` (Apple requires a globally unique ID).
+   - For Watch support, also set the same Team on **GolfMonitorWatch** and
+     **GolfMonitorWatchExtension**. Give the Watch app a unique ID such as
+     `com.yourname.golfmonitor.watchkitapp` and the extension an ID such as
+     `com.yourname.golfmonitor.watchkitapp.watchkitextension`. Update the Watch
+     app's **WKCompanionAppBundleIdentifier** to match the iPhone app ID and
+     the extension's **WKAppBundleIdentifier** to match the Watch app ID.
 3. Connect your iPhone via cable, select it as the run destination, and press **Run** (⌘R).
 
 **Free Apple ID sideloading notes:** with a free (non-paid) Apple developer
@@ -122,17 +128,27 @@ GolfMonitor/
   TrackingEngine.swift      vImage blob tracking: ball (bright) + clubhead (motion)
   MetricsCalculator.swift   speeds, angles, smash, tempo, drag+Magnus carry model
   CalibrationView.swift     distance, side-view setup, ball-diameter auto-detect, units
-  SessionView.swift         countdown → 2 s capture → analysis → results + shot tracer
+  SessionView.swift         single-shot and multi-shot session capture, analysis and results
   ShotHistoryView.swift     per-club filter/averages, delete, CSV export via share sheet
   Info.plist                camera usage description, orientations
+GolfMonitorWatchExtension/ Apple Watch Start/Stop remote for range sessions
 ```
 
 ## Deliberate simplifications (v1)
 
 - **Side view only.** Down-the-line view (for azimuth/path) is not implemented.
 - **Spin is n/a** by design; carry uses club-typical spin assumptions.
-- **No automatic swing detection** — you press Record and swing within the
-  3-2-1 countdown; the clip is a fixed 2 s.
+- **Session recording (experimental):** choose Session for a continuous recording
+  of up to 5 minutes. Afterward, the app looks for motion events, extracts
+  candidate swing clips, analyzes them, and saves the full video to Photos.
+  Busy backgrounds and movement can cause missed or extra candidates; review
+  the resulting shots. Each detected clip is also saved in the local shot library.
+- **Apple Watch remote:** open the Range tab and detect the ball on the iPhone,
+  then use the GolfMonitor Watch app's Start/Stop button from your paired watch.
+  Keep the iPhone app open on Range and the phone/watch connected; start requires
+  a live camera and a locked ball. Install the Watch companion app from the
+  paired Watch app if it does not appear automatically. The Watch app remotely
+  starts a session of the selected duration (up to five minutes).
 - **Calibration uses the bundled golf-ball-specific YOLOv8n Core ML model only.**
   It was fine-tuned for one epoch on the Roboflow GolfBall v1 dataset (CC BY 4.0;
   [dataset](https://universe.roboflow.com/anna-gaming/golfball)). On the held-out

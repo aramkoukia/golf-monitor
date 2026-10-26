@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B20000000000000000000001 /* GolfMonitorWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = B20000000000000000000003 /* GolfMonitorWatch.app */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		B2000000000000000000000E /* GolfMonitorWatchExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = B20000000000000000000010 /* GolfMonitorWatchExtension.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		C10000000000000000000001 /* GolfBallDetector.mlpackage in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000002 /* GolfBallDetector.mlpackage */; };
 /* End PBXBuildFile section */
 
@@ -18,11 +20,52 @@
 			remoteGlobalIDString = A10000000000000000000005;
 			remoteInfo = GolfMonitor;
 		};
+		B20000000000000000000002 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A10000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B20000000000000000000006;
+			remoteInfo = GolfMonitorWatch;
+		};
+		B2000000000000000000000F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A10000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B20000000000000000000015;
+			remoteInfo = GolfMonitorWatchExtension;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		B2000000000000000000000A /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 16;
+			files = (
+				B20000000000000000000001 /* GolfMonitorWatch.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B20000000000000000000017 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				B2000000000000000000000E /* GolfMonitorWatchExtension.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		A10000000000000000000019 /* GolfMonitor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GolfMonitor.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B10000000000000000000025 /* GolfMonitorTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GolfMonitorTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B20000000000000000000003 /* GolfMonitorWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GolfMonitorWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B20000000000000000000010 /* GolfMonitorWatchExtension.appex */ = {isa = PBXFileReference; explicitFileType = wrapper.app-extension; includeInIndex = 0; path = GolfMonitorWatchExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		C10000000000000000000002 /* GolfBallDetector.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = GolfBallDetector.mlpackage; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -33,6 +76,13 @@
 				Info.plist,
 			);
 			target = A10000000000000000000005 /* GolfMonitor */;
+		};
+		B2000000000000000000001B /* Exceptions for "GolfMonitorWatchExtension" folder in "GolfMonitorWatchExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = B20000000000000000000015 /* GolfMonitorWatchExtension */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -48,6 +98,14 @@
 		B10000000000000000000011 /* GolfMonitorTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = GolfMonitorTests;
+			sourceTree = "<group>";
+		};
+		B20000000000000000000004 /* GolfMonitorWatchExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				B2000000000000000000001B /* Exceptions for "GolfMonitorWatchExtension" folder in "GolfMonitorWatchExtension" target */,
+			);
+			path = GolfMonitorWatchExtension;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -67,6 +125,20 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B20000000000000000000005 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B20000000000000000000012 /* Watch Extension Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -76,6 +148,7 @@
 				C10000000000000000000002 /* GolfBallDetector.mlpackage */,
 				B10000000000000000000010 /* GolfMonitor */,
 				B10000000000000000000011 /* GolfMonitorTests */,
+				B20000000000000000000004 /* GolfMonitorWatchExtension */,
 				A10000000000000000000004 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -85,6 +158,8 @@
 			children = (
 				A10000000000000000000019 /* GolfMonitor.app */,
 				B10000000000000000000025 /* GolfMonitorTests.xctest */,
+				B20000000000000000000003 /* GolfMonitorWatch.app */,
+				B20000000000000000000010 /* GolfMonitorWatchExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -99,10 +174,12 @@
 				A10000000000000000000006 /* Sources */,
 				A10000000000000000000007 /* Frameworks */,
 				A10000000000000000000008 /* Resources */,
+				B2000000000000000000000A /* Embed Watch Content */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				B20000000000000000000009 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				B10000000000000000000010 /* GolfMonitor */,
@@ -137,6 +214,49 @@
 			productReference = B10000000000000000000025 /* GolfMonitorTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		B20000000000000000000006 /* GolfMonitorWatch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B2000000000000000000000D /* Build configuration list for PBXNativeTarget "GolfMonitorWatch" */;
+			buildPhases = (
+				B20000000000000000000008 /* Sources */,
+				B20000000000000000000005 /* Frameworks */,
+				B20000000000000000000007 /* Resources */,
+				B20000000000000000000017 /* Embed App Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B20000000000000000000016 /* PBXTargetDependency */,
+			);
+			name = GolfMonitorWatch;
+			packageProductDependencies = (
+			);
+			productName = GolfMonitorWatch;
+			productReference = B20000000000000000000003 /* GolfMonitorWatch.app */;
+			productType = "com.apple.product-type.application.watchapp2";
+		};
+		B20000000000000000000015 /* GolfMonitorWatchExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B2000000000000000000001A /* Build configuration list for PBXNativeTarget "GolfMonitorWatchExtension" */;
+			buildPhases = (
+				B20000000000000000000014 /* Watch Extension Sources */,
+				B20000000000000000000012 /* Watch Extension Frameworks */,
+				B20000000000000000000013 /* Watch Extension Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				B20000000000000000000004 /* GolfMonitorWatchExtension */,
+			);
+			name = GolfMonitorWatchExtension;
+			packageProductDependencies = (
+			);
+			productName = GolfMonitorWatchExtension;
+			productReference = B20000000000000000000010 /* GolfMonitorWatchExtension.appex */;
+			productType = "com.apple.product-type.watchkit2-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -153,6 +273,12 @@
 					B10000000000000000000020 = {
 						CreatedOnToolsVersion = 26.6;
 						TestTargetID = A10000000000000000000005;
+					};
+					B20000000000000000000006 = {
+						CreatedOnToolsVersion = 26.6;
+					};
+					B20000000000000000000015 = {
+						CreatedOnToolsVersion = 26.6;
 					};
 				};
 			};
@@ -172,6 +298,8 @@
 			targets = (
 				A10000000000000000000005 /* GolfMonitor */,
 				B10000000000000000000020 /* GolfMonitorTests */,
+				B20000000000000000000006 /* GolfMonitorWatch */,
+				B20000000000000000000015 /* GolfMonitorWatchExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -185,6 +313,20 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		B10000000000000000000023 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B20000000000000000000007 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B20000000000000000000013 /* Watch Extension Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -209,6 +351,20 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B20000000000000000000008 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B20000000000000000000014 /* Watch Extension Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -216,6 +372,16 @@
 			isa = PBXTargetDependency;
 			target = A10000000000000000000005 /* GolfMonitor */;
 			targetProxy = B10000000000000000000026 /* PBXContainerItemProxy */;
+		};
+		B20000000000000000000009 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B20000000000000000000006 /* GolfMonitorWatch */;
+			targetProxy = B20000000000000000000002 /* PBXContainerItemProxy */;
+		};
+		B20000000000000000000016 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B20000000000000000000015 /* GolfMonitorWatchExtension */;
+			targetProxy = B2000000000000000000000F /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -420,6 +586,78 @@
 			};
 			name = Release;
 		};
+		B2000000000000000000000B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "GolfMonitor Watch";
+				INFOPLIST_KEY_WKApplication = YES;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.example.golfmonitor;
+				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = NO;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.golfmonitor.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
+		B2000000000000000000000C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "GolfMonitor Watch";
+				INFOPLIST_KEY_WKApplication = YES;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.example.golfmonitor;
+				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = NO;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.golfmonitor.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
+		};
+		B20000000000000000000018 /* Watch Extension Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = GolfMonitorWatchExtension/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.golfmonitor.watchkitapp.watchkitextension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+				SDKROOT = watchos;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+			};
+			name = Debug;
+		};
+		B20000000000000000000019 /* Watch Extension Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = GolfMonitorWatchExtension/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.golfmonitor.watchkitapp.watchkitextension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+				SDKROOT = watchos;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -446,6 +684,24 @@
 			buildConfigurations = (
 				B10000000000000000000031 /* Debug */,
 				B10000000000000000000032 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B2000000000000000000000D /* Build configuration list for PBXNativeTarget "GolfMonitorWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B2000000000000000000000B /* Debug */,
+				B2000000000000000000000C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B2000000000000000000001A /* Build configuration list for PBXNativeTarget "GolfMonitorWatchExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B20000000000000000000018 /* Watch Extension Debug */,
+				B20000000000000000000019 /* Watch Extension Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

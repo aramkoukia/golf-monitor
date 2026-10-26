@@ -176,7 +176,7 @@ final class CameraManager: NSObject, ObservableObject {
 
     func stopSession() {
         // Finish any in-flight recording first.
-        videoQueue.async { self.finishRecording(completion: { _ in }) }
+        videoQueue.async { self.finishRecording(completion: nil) }
         sessionQueue.async {
             guard self.session.isRunning else { return }
             self.session.stopRunning()
@@ -306,6 +306,14 @@ final class CameraManager: NSObject, ObservableObject {
             self.recordDuration = CMTime(seconds: duration, preferredTimescale: 600)
             self.recordCompletion = completion
             self.recordURL = url
+        }
+    }
+
+    /// Finish the current recording immediately and deliver its completed file.
+    func stopRecording() {
+        videoQueue.async {
+            guard self.isRecording else { return }
+            self.finishRecording(completion: nil)
         }
     }
 
