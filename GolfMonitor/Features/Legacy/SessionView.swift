@@ -156,11 +156,6 @@ struct SessionView: View {
             )
             .ignoresSafeArea()
 
-            if let ball = detectedBall {
-                BallMarkerView(ball: ball)
-                    .ignoresSafeArea(edges: .top)
-                    .allowsHitTesting(false)
-            }
             idleControls
         }
     }
@@ -1167,11 +1162,7 @@ struct SessionView: View {
                 return (false, reason)
             }
             isSessionMode = false
-            detectBall()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
-                guard phase == .idle else { return }
-                startShot()
-            }
+            startShot()
             return (true, nil)
         }
         if command == "stop" {

@@ -29,9 +29,12 @@ final class WatchRemoteModel: NSObject, ObservableObject, @preconcurrency WCSess
             status = "Command queued — activating Watch link"
             return
         }
+        // Queue every command as a durable fallback, then send live as an
+        // immediate optimization when the phone is reachable.
+        WCSession.default.transferUserInfo(["command": command])
+
         guard WCSession.default.isReachable else {
-            WCSession.default.transferUserInfo(["command": command])
-            status = "Command queued — keep Range open"
+            status = command == "start" ? "Start queued — keep Range open" : "Stop queued — keep Range open"
             return
         }
 
@@ -66,6 +69,7 @@ final class WatchRemoteModel: NSObject, ObservableObject, @preconcurrency WCSess
         Task { @MainActor in
             receiveCaptureState(session.receivedApplicationContext)
             updateConnection(session)
+            requestCurrentState(session)
             if let error {
                 status = "Connection issue"
                 NSLog("Could not activate Watch capture session: %@", error.localizedDescription)
@@ -74,7 +78,10 @@ final class WatchRemoteModel: NSObject, ObservableObject, @preconcurrency WCSess
     }
 
     func sessionReachabilityDidChange(_ session: WCSession) {
-        Task { @MainActor in updateConnection(session) }
+        Task { @MainActor in
+            updateConnection(session)
+            requestCurrentState(session)
+        }
     }
 
     func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
@@ -88,6 +95,28 @@ final class WatchRemoteModel: NSObject, ObservableObject, @preconcurrency WCSess
         guard let previewData = userInfo["preview"] as? Data,
               let image = UIImage(data: previewData) else { return }
         Task { @MainActor in previewImage = Image(uiImage: image) }
+    }
+
+    func session(
+        _ session: WCSession,
+        didReceiveMessage message: [String: Any],
+        replyHandler: @escaping ([String: Any]) -> Void
+    ) {
+        if let previewData = message["preview"] as? Data,
+           let image = UIImage(data: previewData) {
+            Task { @MainActor in previewImage = Image(uiImage: image) }
+        }
+        if message["recording"] is Bool || message["canStart"] is Bool {
+            Task { @MainActor in receiveCaptureState(message) }
+        }
+        replyHandler(["accepted": true])
+    }
+
+    private func requestCurrentState(_ session: WCSession) {
+        guard session.activationState == .activated, session.isReachable else { return }
+        session.sendMessage(["requestState": true], replyHandler: { [weak self] reply in
+            Task { @MainActor in self?.receiveCaptureState(reply) }
+        }, errorHandler: nil)
     }
 
     private func receiveCaptureState(_ context: [String: Any]) {
@@ -133,6 +162,18 @@ struct WatchRemoteView: View {
                     .scaledToFill()
                     .frame(height: 62)
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            } else {
+                VStack(spacing: 3) {
+                    Image(systemName: "camera.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text("WAITING FOR PHONE CAMERA")
+                        .font(.system(size: 7, weight: .bold, design: .rounded))
+                        .minimumScaleFactor(0.7)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 62)
+                .foregroundStyle(.secondary)
+                .background(.black.opacity(0.15), in: RoundedRectangle(cornerRadius: 8))
             }
 
             Button(action: model.sendCaptureCommand) {

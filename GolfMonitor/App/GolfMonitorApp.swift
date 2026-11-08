@@ -15,7 +15,13 @@ struct GolfMonitorApp: App {
                 .environmentObject(settings)
                 .environmentObject(router)
                 .preferredColorScheme(.dark)
-                .task { applyDebugLaunch() }
+                .task {
+                    WatchCaptureBridge.shared.activate()
+                    applyDebugLaunch()
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .watchCaptureOpenRange)) { _ in
+                    router.tab = .range
+                }
         }
     }
 

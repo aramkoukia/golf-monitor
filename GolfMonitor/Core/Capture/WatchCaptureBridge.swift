@@ -6,6 +6,10 @@ import QuartzCore
 import UIKit
 import WatchConnectivity
 
+extension Notification.Name {
+    static let watchCaptureOpenRange = Notification.Name("GolfMonitorWatchCaptureOpenRange")
+}
+
 final class WatchCaptureBridge: NSObject, ObservableObject, WCSessionDelegate {
     static let shared = WatchCaptureBridge()
 
@@ -13,12 +17,17 @@ final class WatchCaptureBridge: NSObject, ObservableObject, WCSessionDelegate {
     @Published private(set) var isReachable = false
     @Published private(set) var isRecording = false
     @Published private(set) var canStartCapture = false
-    var commandHandler: ((String) -> (accepted: Bool, reason: String?))?
+    var commandHandler: ((String) -> (accepted: Bool, reason: String?))? {
+        didSet {
+            if commandHandler != nil { flushPendingCommands() }
+        }
+    }
 
     private let previewContext = CIContext()
     private let previewQueue = DispatchQueue(label: "golfmonitor.watch.preview", qos: .utility)
     private var lastPreviewSentAt: TimeInterval = 0
     private var previewData: Data?
+    private var pendingCommands: [String] = []
 
     private override init() {
         super.init()
@@ -59,8 +68,15 @@ final class WatchCaptureBridge: NSObject, ObservableObject, WCSessionDelegate {
                 DispatchQueue.main.async {
                     self.previewData = data
                     self.updateApplicationContext()
+
+                    let session = WCSession.default
+                    session.transferUserInfo(["preview": data])
+                    if session.activationState == .activated && session.isReachable {
+                        session.sendMessage(["preview": data], replyHandler: nil) { error in
+                            NSLog("Live watch preview delivery failed: %@", error.localizedDescription)
+                        }
+                    }
                 }
-                WCSession.default.transferUserInfo(["preview": data])
             }
         }
     }
@@ -92,7 +108,7 @@ final class WatchCaptureBridge: NSObject, ObservableObject, WCSessionDelegate {
         guard let command = userInfo["command"] as? String,
               command == "start" || command == "stop" else { return }
         DispatchQueue.main.async {
-            _ = self.commandHandler?(command)
+            self.handleCommand(command)
         }
     }
 
@@ -101,19 +117,54 @@ final class WatchCaptureBridge: NSObject, ObservableObject, WCSessionDelegate {
         didReceiveMessage message: [String: Any],
         replyHandler: @escaping ([String: Any]) -> Void
     ) {
+        if message["requestState"] as? Bool == true {
+            replyHandler([
+                "recording": isRecording,
+                "canStart": canStartCapture,
+                "preview": previewData as Any
+            ])
+            return
+        }
         guard let command = message["command"] as? String,
               command == "start" || command == "stop" else {
             replyHandler(["accepted": false, "reason": "Unknown command"])
             return
         }
         DispatchQueue.main.async {
-            let response = self.commandHandler?(command)
-                ?? (false, "Open GolfMonitor on the iPhone Range screen.")
+            let response = self.handleCommand(command)
+            NSLog("Watch command live: %@ accepted=%@ reason=%@", command,
+                  response.accepted ? "yes" : "no", response.reason ?? "")
+            self.updateApplicationContext()
             replyHandler([
                 "accepted": response.accepted,
                 "reason": response.reason ?? ""
             ])
         }
+    }
+
+    private func handleCommand(_ command: String) -> (accepted: Bool, reason: String?) {
+        NotificationCenter.default.post(name: .watchCaptureOpenRange, object: nil)
+
+        guard let commandHandler else {
+            if pendingCommands.last != command { pendingCommands.append(command) }
+            return (true, "Opening GolfMonitor Range on the iPhone.")
+        }
+
+        let response = commandHandler(command)
+        updateApplicationContext()
+        return response
+    }
+
+    private func flushPendingCommands() {
+        guard let commandHandler else { return }
+        let commands = pendingCommands
+        pendingCommands.removeAll()
+        for command in commands {
+            let response = commandHandler(command)
+            NSLog("Watch command pending: %@ accepted=%@ reason=%@", command,
+                  response.accepted ? "yes" : "no", response.reason ?? "")
+        }
+        updateApplicationContext()
     }
 
     private func refreshState() {
