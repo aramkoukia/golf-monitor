@@ -55,9 +55,12 @@ final class WatchCaptureBridge: NSObject, ObservableObject, WCSessionDelegate {
             guard let cgImage = self.previewContext.createCGImage(scaledImage, from: scaledImage.extent) else { return }
             let data = UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.5)
 
-            DispatchQueue.main.async {
-                self.previewData = data
-                self.updateApplicationContext()
+            if let data {
+                DispatchQueue.main.async {
+                    self.previewData = data
+                    self.updateApplicationContext()
+                }
+                WCSession.default.transferUserInfo(["preview": data])
             }
         }
     }
@@ -82,6 +85,14 @@ final class WatchCaptureBridge: NSObject, ObservableObject, WCSessionDelegate {
     func sessionReachabilityDidChange(_ session: WCSession) {
         DispatchQueue.main.async {
             self.refreshState()
+        }
+    }
+
+    func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
+        guard let command = userInfo["command"] as? String,
+              command == "start" || command == "stop" else { return }
+        DispatchQueue.main.async {
+            _ = self.commandHandler?(command)
         }
     }
 

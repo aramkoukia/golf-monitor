@@ -313,15 +313,6 @@ struct SessionView: View {
 
     private func shotControlDeck(compact: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: compact ? 10 : 16) {
-            challengeCard
-
-            Picker("Capture mode", selection: $isSessionMode) {
-                Text("Single shot").tag(false)
-                Text("Session").tag(true)
-            }
-            .pickerStyle(.segmented)
-            .tint(Theme.Palette.plasma)
-
             HStack(spacing: 6) {
                 Image(systemName: "applewatch")
                 Text(watchBridge.isPaired
@@ -332,30 +323,11 @@ struct SessionView: View {
             .foregroundStyle(watchBridge.isPaired && watchBridge.isReachable
                              ? Theme.Palette.ion : Theme.Palette.mist)
 
-            HStack {
-                CapsLabel("Shot setup")
-                Spacer()
-                HStack(spacing: 6) {
-                    Image(systemName: detectedBall == nil ? "scope" : "checkmark.circle.fill")
-                    Text(detectedBall == nil ? "BALL NOT LOCKED" : "BALL LOCKED")
-                }
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                .tracking(0.4)
-                .foregroundStyle(detectedBall == nil ? Theme.Palette.caution : Theme.Palette.ion)
+            HStack(spacing: 12) {
+                durationSelector(title: "COUNTDOWN", selection: $countdownSeconds)
+                durationSelector(title: "CLIP", selection: $clipSeconds)
             }
-
-            clubSelector
-
-            if isSessionMode {
-                sessionDurationSelector
-                sessionActions
-            } else {
-                HStack(spacing: 12) {
-                    durationSelector(title: "COUNTDOWN", selection: $countdownSeconds)
-                    durationSelector(title: "CLIP", selection: $clipSeconds)
-                }
-                shotActions
-            }
+            shotActions
         }
         .padding(compact ? 12 : 16)
         .glassCard(cornerRadius: 26, clear: true)
@@ -417,9 +389,8 @@ struct SessionView: View {
             )
         }
         .buttonStyle(.plain)
-        .disabled(!canRecord)
-    }
 
+    }
     @ViewBuilder
     private var challengeCard: some View {
         if !router.rangeContext.isFree, router.rangeContext.isFinished() {
@@ -503,31 +474,6 @@ struct SessionView: View {
     private var shotActions: some View {
         HStack(spacing: 10) {
             Button {
-                Haptics.tap()
-                detectBall()
-            } label: {
-                VStack(spacing: 5) {
-                    if isDetecting {
-                        ProgressView()
-                            .tint(Theme.Palette.floodlight)
-                            .frame(height: 19)
-                    } else {
-                        Image(systemName: "scope")
-                            .font(.system(size: 17, weight: .semibold))
-                            .frame(height: 19)
-                    }
-                    Text(isDetecting ? "SCANNING" : "FIND BALL")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
-                        .tracking(0.5)
-                }
-                .foregroundStyle(Theme.Palette.floodlight)
-                .frame(width: 82, height: 58)
-                .glassCard(cornerRadius: 16, interactive: true, clear: true)
-            }
-            .buttonStyle(.plain)
-            .disabled(isDetecting || !camera.isAuthorized || !camera.isSessionRunning)
-
-            Button {
                 Haptics.impact(.medium)
                 camera.lockFocusAndExposure()
                 startShot()
@@ -553,20 +499,21 @@ struct SessionView: View {
                 .frame(maxWidth: .infinity, minHeight: 58)
                 .glassCard(
                     cornerRadius: 16,
-                    tint: canRecord ? Theme.Palette.plasma : nil,
-                    interactive: canRecord,
+                    tint: camera.isSessionRunning ? Theme.Palette.plasma : nil,
+                    interactive: camera.isSessionRunning,
                     clear: true
                 )
-                .shadow(color: canRecord ? Theme.Palette.plasma.opacity(0.22) : .clear, radius: 16, y: 5)
+                .shadow(color: camera.isSessionRunning ? Theme.Palette.plasma.opacity(0.22) : .clear, radius: 16, y: 5)
             }
             .buttonStyle(.plain)
-            .disabled(!canRecord)
             .animation(Theme.Motion.snappy, value: canRecord)
         }
     }
 
     private var recordButtonSubtitle: String {
-        canRecord ? "\(Int(clipDuration)) SEC · \(Int(camera.selectedFPS)) FPS" : "FIND THE BALL TO UNLOCK"
+        camera.isSessionRunning
+            ? "\(Int(clipDuration)) SEC · \(Int(camera.selectedFPS)) FPS"
+            : "WAITING FOR LIVE CAMERA"
     }
 
     private func inlineNotice(_ message: String, color: Color, icon: String) -> some View {
@@ -1044,10 +991,10 @@ struct SessionView: View {
 
     // MARK: Flow
 
-    /// Recording unlocks only after a current, in-range ball detection.
+    /// Recording is available whenever the live camera is ready.
     private var canRecord: Bool {
         phase == .idle && camera.isAuthorized && camera.isSessionRunning
-            && detectedBall != nil && !router.rangeContext.isFinished()
+            && !router.rangeContext.isFinished()
     }
 
     /// One-tap calibration from the Session screen: grab a frame, find the
@@ -1132,6 +1079,13 @@ struct SessionView: View {
     }
 
     private func startShot() {
+        guard phase == .idle,
+              camera.isAuthorized,
+              camera.isSessionRunning else {
+            detectMessage = "Open Range and wait for the live camera before recording."
+            return
+        }
+        camera.lockFocusAndExposure()
         errorMessage = nil
         detectMessage = nil
         savedConfirmation = false
@@ -1170,7 +1124,12 @@ struct SessionView: View {
     }
 
     private func startPracticeSession() {
-        guard canRecord else { return }
+        guard phase == .idle,
+              camera.isAuthorized,
+              camera.isSessionRunning else {
+            detectMessage = "Open Range and wait for the live camera before starting."
+            return
+        }
         errorMessage = nil
         sessionError = nil
         sessionPhotoSaved = false
@@ -1200,29 +1159,46 @@ struct SessionView: View {
 
     private func handleWatchCommand(_ command: String) -> (accepted: Bool, reason: String?) {
         if command == "start" {
-            guard canRecord else {
-                let reason = "Open Range, wait for the live camera, and detect the ball before starting."
+            guard phase == .idle,
+                  camera.isAuthorized,
+                  camera.isSessionRunning else {
+                let reason = "Open Range and wait for the live camera before starting."
                 detectMessage = "Watch remote: \(reason)"
                 return (false, reason)
             }
-            isSessionMode = true
-            startPracticeSession()
+            isSessionMode = false
+            detectBall()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
+                guard phase == .idle else { return }
+                startShot()
+            }
             return (true, nil)
         }
         if command == "stop" {
-            guard phase == .sessionRecording else {
-                return (false, "There is no active session to stop.")
+            if phase == .countdown {
+                shotTask?.cancel()
+                shotTask = nil
+                phase = .idle
+                camera.unlockFocusAndExposure()
+                return (true, nil)
             }
-            stopPracticeSession()
-            return (true, nil)
+            if phase == .recording {
+                camera.stopRecording()
+                return (true, nil)
+            }
+            if phase == .sessionRecording {
+                stopPracticeSession()
+                return (true, nil)
+            }
+            return (false, "There is no active swing to stop.")
         }
         return (false, "Unknown Watch command.")
     }
 
     private func updateWatchCaptureState() {
         watchBridge.updateCaptureState(
-            isRecording: phase == .sessionRecording,
-            canStart: canRecord
+            isRecording: phase == .countdown || phase == .recording || phase == .sessionRecording,
+            canStart: camera.isAuthorized && camera.isSessionRunning && phase == .idle
         )
     }
 

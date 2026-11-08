@@ -22,28 +22,38 @@ final class WatchRemoteModel: NSObject, ObservableObject, @preconcurrency WCSess
     }
 
     func sendCaptureCommand() {
-        guard WCSession.default.activationState == .activated,
-              WCSession.default.isReachable else {
-            status = "Open GolfMonitor on iPhone"
+        let command = isRecording ? "stop" : "start"
+        guard WCSession.default.activationState == .activated else {
+            WCSession.default.activate()
+            WCSession.default.transferUserInfo(["command": command])
+            status = "Command queued — activating Watch link"
+            return
+        }
+        guard WCSession.default.isReachable else {
+            WCSession.default.transferUserInfo(["command": command])
+            status = "Command queued — keep Range open"
             return
         }
 
-        let command = isRecording ? "stop" : "start"
-        status = command == "start" ? "Starting session…" : "Stopping session…"
+        status = command == "start" ? "Starting swing…" : "Ending swing…"
         WCSession.default.sendMessage(
             ["command": command],
             replyHandler: { [weak self] reply in
                 Task { @MainActor in
                     if reply["accepted"] as? Bool == true {
                         self?.isRecording = command == "start"
-                        self?.status = command == "start" ? "Session recording" : "Ready to record"
+                        self?.status = command == "start" ? "Swing armed — swing now" : "Ready for swing"
                     } else {
                         self?.status = reply["reason"] as? String ?? "Phone could not start"
                     }
                 }
             },
-            errorHandler: { [weak self] _ in
-                Task { @MainActor in self?.status = "Keep GolfMonitor open on iPhone" }
+            errorHandler: { [weak self] error in
+                WCSession.default.transferUserInfo(["command": command])
+                Task { @MainActor in
+                    self?.status = "Command queued — keep Range open"
+                    NSLog("Watch capture message failed: %@", error.localizedDescription)
+                }
             }
         )
     }
@@ -74,6 +84,12 @@ final class WatchRemoteModel: NSObject, ObservableObject, @preconcurrency WCSess
         }
     }
 
+    func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
+        guard let previewData = userInfo["preview"] as? Data,
+              let image = UIImage(data: previewData) else { return }
+        Task { @MainActor in previewImage = Image(uiImage: image) }
+    }
+
     private func receiveCaptureState(_ context: [String: Any]) {
         isRecording = context["recording"] as? Bool ?? false
         canStartCapture = context["canStart"] as? Bool ?? false
@@ -86,9 +102,9 @@ final class WatchRemoteModel: NSObject, ObservableObject, @preconcurrency WCSess
     private func updateConnection(_ session: WCSession) {
         isPhoneReachable = session.activationState == .activated && session.isReachable
         if isRecording {
-            status = "Session recording"
+            status = "Swing armed — swing now"
         } else if isPhoneReachable {
-            status = canStartCapture ? "Ready to record" : "Detect ball on iPhone"
+            status = "Ready for swing"
         } else {
             status = "Open GolfMonitor on iPhone"
         }
@@ -123,7 +139,7 @@ struct WatchRemoteView: View {
                 VStack(spacing: 5) {
                     Image(systemName: model.isRecording ? "stop.fill" : "record.circle.fill")
                         .font(.system(size: 31, weight: .semibold))
-                    Text(model.isRecording ? "END SESSION" : "START SESSION")
+                    Text(model.isRecording ? "END SWING" : "START SWING")
                         .font(.system(size: 10, weight: .black, design: .rounded))
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
@@ -133,9 +149,8 @@ struct WatchRemoteView: View {
                 .background(model.isRecording ? Color.red : Color.orange, in: Circle())
             }
             .buttonStyle(.plain)
-            .disabled(!model.isPhoneReachable)
-            .opacity(model.isPhoneReachable ? 1 : 0.5)
-            .accessibilityLabel(model.isRecording ? "End range session" : "Start range session")
+            .opacity(model.isPhoneReachable ? 1 : 0.75)
+            .accessibilityLabel(model.isRecording ? "End swing recording" : "Start swing recording")
         }
         .padding(.horizontal, 8)
     }
