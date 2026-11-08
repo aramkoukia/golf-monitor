@@ -20,8 +20,8 @@ final class WatchCaptureBridge: NSObject, ObservableObject, WCSessionDelegate {
     var commandHandler: ((String) -> (accepted: Bool, reason: String?))? {
         didSet {
             if commandHandler != nil {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                    self.flushPendingCommands()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                    self?.flushPendingCommands()
                 }
             }
         }
@@ -33,6 +33,7 @@ final class WatchCaptureBridge: NSObject, ObservableObject, WCSessionDelegate {
     private var previewData: Data?
     private var pendingCommands: [String] = []
     private var commandResults: [String: (accepted: Bool, reason: String?)] = [:]
+    private var diagnostic = "Phone ready"
 
     private override init() {
         super.init()
@@ -50,6 +51,7 @@ final class WatchCaptureBridge: NSObject, ObservableObject, WCSessionDelegate {
         DispatchQueue.main.async {
             self.isRecording = recording
             self.canStartCapture = canStart
+            self.diagnostic = recording ? "Recording on phone" : (canStart ? "Phone camera ready" : "Waiting for phone camera")
             self.updateApplicationContext()
             if canStart { self.flushPendingCommands() }
         }
@@ -73,6 +75,7 @@ final class WatchCaptureBridge: NSObject, ObservableObject, WCSessionDelegate {
             if let data {
                 DispatchQueue.main.async {
                     self.previewData = data
+                    self.updateApplicationContext()
 
                     let session = WCSession.default
                     if session.activationState == .activated && session.isReachable {
@@ -113,7 +116,7 @@ final class WatchCaptureBridge: NSObject, ObservableObject, WCSessionDelegate {
 
     func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
         guard let command = userInfo["command"] as? String,
-              command == "start" || command == "stop" else { return }
+              command == "start" || command == "stop" || command == "open_camera" else { return }
         let requestID = userInfo["requestID"] as? String
         DispatchQueue.main.async {
             _ = self.handleCommand(command, requestID: requestID)
@@ -129,12 +132,14 @@ final class WatchCaptureBridge: NSObject, ObservableObject, WCSessionDelegate {
             replyHandler([
                 "recording": isRecording,
                 "canStart": canStartCapture,
-                "preview": previewData as Any
+                "preview": previewData as Any,
+                "diagnostic": diagnostic,
+                "phoneReachable": true
             ])
             return
         }
         guard let command = message["command"] as? String,
-              command == "start" || command == "stop" else {
+              command == "start" || command == "stop" || command == "open_camera" else {
             replyHandler(["accepted": false, "reason": "Unknown command"])
             return
         }
@@ -152,6 +157,9 @@ final class WatchCaptureBridge: NSObject, ObservableObject, WCSessionDelegate {
     }
 
     private func handleCommand(_ command: String, requestID: String? = nil) -> (accepted: Bool, reason: String?) {
+        diagnostic = "Phone received \(command)"
+        NSLog("Watch command received: %@ request=%@", command, requestID ?? "none")
+        updateApplicationContext()
         if let requestID,
            let cached = commandResults[requestID] {
             return cached
@@ -159,9 +167,27 @@ final class WatchCaptureBridge: NSObject, ObservableObject, WCSessionDelegate {
 
         NotificationCenter.default.post(name: .watchCaptureOpenRange, object: nil)
 
+        if command == "open_camera" {
+            diagnostic = "Opening iPhone Range"
+            NotificationCenter.default.post(name: .watchCaptureOpenRange, object: nil)
+            if let url = URL(string: "golfmonitor://open-range") {
+                DispatchQueue.main.async {
+                    UIApplication.shared.open(url, options: [:], completionHandler: nil)
+                }
+            }
+            schedulePendingRetry(attempts: 12)
+            let response = (true, nil as String?)
+            if let requestID { commandResults[requestID] = response }
+            updateApplicationContext()
+            return response
+        }
+
         guard let commandHandler else {
             if pendingCommands.last != command { pendingCommands.append(command) }
-            return (false, "Open GolfMonitor and keep the Range screen visible.")
+            schedulePendingRetry(attempts: 12)
+            // Rejection is intentionally not cached: a later live/durable delivery
+            // may arrive after Range has mounted and should be allowed to retry.
+            return (false, "Opening Range — wait for the live camera, then press Start Swing again.")
         }
 
         let response = commandHandler(command)
@@ -171,12 +197,14 @@ final class WatchCaptureBridge: NSObject, ObservableObject, WCSessionDelegate {
                 canStartCapture = false
             } else {
                 isRecording = false
+                canStartCapture = true
             }
             updateApplicationContext()
         } else if command == "start" {
             if pendingCommands.last != command { pendingCommands.append(command) }
         }
-        if let requestID {
+        // Cache successful replies only; failures are never permanent so reconnects can recover.
+        if response.accepted, let requestID {
             commandResults[requestID] = response
             if commandResults.count > 50 {
                 commandResults.removeValue(forKey: commandResults.keys.first ?? "")
@@ -184,6 +212,15 @@ final class WatchCaptureBridge: NSObject, ObservableObject, WCSessionDelegate {
         }
         updateApplicationContext()
         return response
+    }
+
+    private func schedulePendingRetry(attempts: Int) {
+        guard attempts > 0 else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self else { return }
+            if !self.pendingCommands.isEmpty { self.flushPendingCommands() }
+            if !self.pendingCommands.isEmpty { self.schedulePendingRetry(attempts: attempts - 1) }
+        }
     }
 
     private func flushPendingCommands() {
@@ -213,7 +250,8 @@ final class WatchCaptureBridge: NSObject, ObservableObject, WCSessionDelegate {
                 "recording": isRecording,
                 "canStart": canStartCapture,
                 "phoneReachable": WCSession.default.isReachable,
-                "watchPaired": WCSession.default.isPaired && WCSession.default.isWatchAppInstalled
+                "watchPaired": WCSession.default.isPaired && WCSession.default.isWatchAppInstalled,
+                "diagnostic": diagnostic
             ]
             if let previewData { context["preview"] = previewData }
             try WCSession.default.updateApplicationContext(context)

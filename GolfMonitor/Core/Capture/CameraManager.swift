@@ -75,11 +75,14 @@ final class CameraManager: NSObject, ObservableObject {
     private func setupSessionIfNeeded() {
         sessionQueue.async {
             guard !self.didSetup else { return }
-            self.didSetup = true
             do {
                 try self.configureSession()
+                self.didSetup = true
                 DispatchQueue.main.async { self.previewLayer.session = self.session }
             } catch {
+                self.didSetup = false
+                for input in self.session.inputs { self.session.removeInput(input) }
+                for output in self.session.outputs { self.session.removeOutput(output) }
                 DispatchQueue.main.async { self.lastError = "Camera setup failed: \(error.localizedDescription)" }
             }
         }

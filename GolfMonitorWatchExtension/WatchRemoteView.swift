@@ -2,6 +2,7 @@ import SwiftUI
 import Combine
 import UIKit
 import WatchConnectivity
+import WatchKit
 
 @MainActor
 final class WatchRemoteModel: NSObject, ObservableObject, @preconcurrency WCSessionDelegate {
@@ -10,6 +11,7 @@ final class WatchRemoteModel: NSObject, ObservableObject, @preconcurrency WCSess
     @Published private(set) var canStartCapture = false
     @Published private(set) var previewImage: Image?
     @Published private(set) var status = "Connecting…"
+    @Published private(set) var phoneDiagnostic = ""
     override init() {
         super.init()
         guard WCSession.isSupported() else {
@@ -22,38 +24,62 @@ final class WatchRemoteModel: NSObject, ObservableObject, @preconcurrency WCSess
 
     func sendCaptureCommand() {
         let command = isRecording ? "stop" : "start"
-        guard WCSession.default.activationState == .activated else {
-            WCSession.default.activate()
-            WCSession.default.transferUserInfo(["command": command])
+        sendCommand(command)
+    }
+
+    func openPhoneCamera() {
+        if let url = URL(string: "golfmonitor://open-range") {
+            WKExtension.shared().openSystemURL(url)
+        }
+        sendCommand("open_camera")
+    }
+
+    private func sendCommand(_ command: String) {
+        let requestID = UUID().uuidString
+        let session = WCSession.default
+
+        guard session.activationState == .activated else {
+            session.activate()
+            session.transferUserInfo(["command": command, "requestID": requestID])
             status = "Command queued — activating Watch link"
             return
         }
-        let requestID = UUID().uuidString
-        WCSession.default.transferUserInfo(["command": command, "requestID": requestID])
 
-        guard WCSession.default.isReachable else {
-            status = command == "start" ? "Start queued — keep Range open" : "Stop queued — keep Range open"
+        // Deliver durably even when live messaging is available. The phone retries
+        // temporary Range/readiness failures and caches successful request IDs.
+        session.transferUserInfo(["command": command, "requestID": requestID])
+
+        guard session.isReachable else {
+            status = command == "open_camera" ? "Opening phone camera…" :
+                (command == "start" ? "Start queued — keep Range open" : "Stop queued — keep Range open")
             return
         }
 
-        status = command == "start" ? "Starting swing…" : "Ending swing…"
-        WCSession.default.sendMessage(
+        status = command == "open_camera" ? "Opening phone camera…" :
+            (command == "start" ? "Starting swing…" : "Ending swing…")
+        session.sendMessage(
             ["command": command, "requestID": requestID],
             replyHandler: { [weak self] reply in
                 Task { @MainActor in
+                    guard let self else { return }
                     if reply["accepted"] as? Bool == true {
-                        self?.isRecording = command == "start"
-                        self?.status = command == "start" ? "Swing armed — swing now" : "Ready for swing"
+                        if command == "open_camera" {
+                            self.status = "Opening iPhone Range"
+                            self.requestCurrentState(session)
+                        } else {
+                            self.isRecording = command == "start"
+                            self.status = command == "start" ? "Swing armed — swing now" : "Ready for swing"
+                        }
                     } else {
-                        self?.status = reply["reason"] as? String ?? "Phone could not start"
+                        self.status = reply["reason"] as? String ?? "Phone could not complete the command"
                     }
                 }
             },
             errorHandler: { [weak self] error in
-                WCSession.default.transferUserInfo(["command": command, "requestID": requestID])
+                session.transferUserInfo(["command": command, "requestID": requestID])
                 Task { @MainActor in
                     self?.status = "Command queued — keep Range open"
-                    NSLog("Watch capture message failed: %@", error.localizedDescription)
+                    NSLog("Watch command message failed: %@", error.localizedDescription)
                 }
             }
         )
@@ -120,6 +146,9 @@ final class WatchRemoteModel: NSObject, ObservableObject, @preconcurrency WCSess
     private func receiveCaptureState(_ context: [String: Any]) {
         isRecording = context["recording"] as? Bool ?? false
         canStartCapture = context["canStart"] as? Bool ?? false
+        if let diagnostic = context["diagnostic"] as? String, !diagnostic.isEmpty {
+            phoneDiagnostic = diagnostic
+        }
         if let previewData = context["preview"] as? Data,
            let image = UIImage(data: previewData) {
             previewImage = Image(uiImage: image)
@@ -128,7 +157,9 @@ final class WatchRemoteModel: NSObject, ObservableObject, @preconcurrency WCSess
 
     private func updateConnection(_ session: WCSession) {
         isPhoneReachable = session.activationState == .activated && session.isReachable
-        if isRecording {
+        if !phoneDiagnostic.isEmpty && !phoneDiagnostic.hasPrefix("Phone ready") {
+            status = phoneDiagnostic
+        } else if isRecording {
             status = "Swing armed — swing now"
         } else if isPhoneReachable && canStartCapture {
             status = "Ready for swing"
@@ -144,55 +175,66 @@ struct WatchRemoteView: View {
     @StateObject private var model = WatchRemoteModel()
 
     var body: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 5) {
-                Circle()
-                    .fill(model.isPhoneReachable ? Color.green : Color.orange)
-                    .frame(width: 6, height: 6)
-                Text(model.status.uppercased())
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
-            .foregroundStyle(.secondary)
-
-            if let previewImage = model.previewImage {
-                previewImage
-                    .resizable()
-                    .scaledToFill()
-                    .frame(height: 62)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            } else {
-                VStack(spacing: 3) {
-                    Image(systemName: "camera.fill")
-                        .font(.system(size: 14, weight: .semibold))
-                    Text("WAITING FOR PHONE CAMERA")
-                        .font(.system(size: 7, weight: .bold, design: .rounded))
-                        .minimumScaleFactor(0.7)
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 62)
-                .foregroundStyle(.secondary)
-                .background(.black.opacity(0.15), in: RoundedRectangle(cornerRadius: 8))
-            }
-
-            Button(action: model.sendCaptureCommand) {
-                VStack(spacing: 5) {
-                    Image(systemName: model.isRecording ? "stop.fill" : "record.circle.fill")
-                        .font(.system(size: 31, weight: .semibold))
-                    Text(model.isRecording ? "END SWING" : "START SWING")
-                        .font(.system(size: 10, weight: .black, design: .rounded))
+        ScrollView {
+            VStack(spacing: 8) {
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(model.isPhoneReachable ? Color.green : Color.orange)
+                        .frame(width: 6, height: 6)
+                    Text(model.status.uppercased())
+                        .font(.system(size: 9, weight: .bold, design: .rounded))
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                 }
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(model.isRecording ? Color.red : Color.orange, in: Circle())
+                .foregroundStyle(.secondary)
+
+                Button(action: model.openPhoneCamera) {
+                    Label("OPEN PHONE CAMERA", systemImage: "camera.viewfinder")
+                        .font(.system(size: 9, weight: .bold, design: .rounded))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 5)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.blue)
+
+                if let previewImage = model.previewImage {
+                    previewImage
+                        .resizable()
+                        .scaledToFill()
+                        .frame(height: 62)
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                } else {
+                    VStack(spacing: 3) {
+                        Image(systemName: "camera.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text("WAITING FOR PHONE CAMERA")
+                            .font(.system(size: 7, weight: .bold, design: .rounded))
+                            .minimumScaleFactor(0.7)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 62)
+                    .foregroundStyle(.secondary)
+                    .background(.black.opacity(0.15), in: RoundedRectangle(cornerRadius: 8))
+                }
+
+                Button(action: model.sendCaptureCommand) {
+                    VStack(spacing: 5) {
+                        Image(systemName: model.isRecording ? "stop.fill" : "record.circle.fill")
+                            .font(.system(size: 31, weight: .semibold))
+                        Text(model.isRecording ? "END SWING" : "START SWING")
+                            .font(.system(size: 10, weight: .black, design: .rounded))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(model.isRecording ? Color.red : Color.orange, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .opacity(model.isPhoneReachable ? 1 : 0.75)
+                .accessibilityLabel(model.isRecording ? "End swing recording" : "Start swing recording")
             }
-            .buttonStyle(.plain)
-            .opacity(model.isPhoneReachable ? 1 : 0.75)
-            .accessibilityLabel(model.isRecording ? "End swing recording" : "Start swing recording")
+            .padding(.horizontal, 8)
         }
-        .padding(.horizontal, 8)
     }
 }
