@@ -21,7 +21,9 @@ measure well, estimates the rest, and tells you which is which.
      `com.yourname.golfmonitor.watchkitapp.watchkitextension`. Update the Watch
      app's **WKCompanionAppBundleIdentifier** to match the iPhone app ID and
      the extension's **WKAppBundleIdentifier** to match the Watch app ID.
-3. Connect your iPhone via cable, select it as the run destination, and press **Run** (⌘R).
+3. Connect your iPhone via cable, select the **GolfMonitor** scheme and your iPhone as the run destination, then press **Run** (⌘R). The embedded watch app is included automatically when it is signed correctly.
+4. To run or debug the watch UI directly, keep the iPhone and paired Apple Watch available, select the **GolfMonitorWatch** scheme in the scheme menu, choose your physical Watch or an Apple Watch simulator as the destination, and press **Run** (⌘R).
+5. If this is your first physical-device watch install, unlock both devices and accept the developer/partner trust prompts. In the iPhone **Watch** app, confirm that GolfMonitor appears under **My Watch → Available Apps** or **Installed**.
 
 **Free Apple ID sideloading notes:** with a free (non-paid) Apple developer
 account, Xcode will sign the app for 7 days — after that you re-run from Xcode

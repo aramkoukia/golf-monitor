@@ -9,9 +9,9 @@
 /* Begin PBXBuildFile section */
 		B20000000000000000000001 /* GolfMonitorWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = B20000000000000000000003 /* GolfMonitorWatch.app */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		B2000000000000000000000E /* GolfMonitorWatchExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = B20000000000000000000010 /* GolfMonitorWatchExtension.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		D20000000000000000000001 /* WatchCaptureBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000003 /* WatchCaptureBridge.swift */; };
-		D20000000000000000000002 /* SessionVideoProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000004 /* SessionVideoProcessor.swift */; };
 		C10000000000000000000001 /* GolfBallDetector.mlpackage in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000002 /* GolfBallDetector.mlpackage */; };
+		D20000000000000000000001 /* GolfMonitor/Core/Capture/WatchCaptureBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000003 /* GolfMonitor/Core/Capture/WatchCaptureBridge.swift */; };
+		D20000000000000000000002 /* GolfMonitor/Core/Capture/SessionVideoProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000004 /* GolfMonitor/Core/Capture/SessionVideoProcessor.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -67,19 +67,19 @@
 		A10000000000000000000019 /* GolfMonitor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GolfMonitor.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B10000000000000000000025 /* GolfMonitorTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GolfMonitorTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B20000000000000000000003 /* GolfMonitorWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GolfMonitorWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		B20000000000000000000010 /* GolfMonitorWatchExtension.appex */ = {isa = PBXFileReference; explicitFileType = wrapper.app-extension; includeInIndex = 0; path = GolfMonitorWatchExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		D20000000000000000000003 /* WatchCaptureBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GolfMonitor/Core/Capture/WatchCaptureBridge.swift; sourceTree = "<group>"; };
-		D20000000000000000000004 /* SessionVideoProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GolfMonitor/Core/Capture/SessionVideoProcessor.swift; sourceTree = "<group>"; };
+		B20000000000000000000010 /* GolfMonitorWatchExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = GolfMonitorWatchExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		C10000000000000000000002 /* GolfBallDetector.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = GolfBallDetector.mlpackage; sourceTree = "<group>"; };
+		D20000000000000000000003 /* GolfMonitor/Core/Capture/WatchCaptureBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GolfMonitor/Core/Capture/WatchCaptureBridge.swift; sourceTree = "<group>"; };
+		D20000000000000000000004 /* GolfMonitor/Core/Capture/SessionVideoProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GolfMonitor/Core/Capture/SessionVideoProcessor.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
 		B1000000000000000000000F /* Exceptions for "GolfMonitor" folder in "GolfMonitor" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				Info.plist,
 				Core/Capture/SessionVideoProcessor.swift,
 				Core/Capture/WatchCaptureBridge.swift,
+				Info.plist,
 			);
 			target = A10000000000000000000005 /* GolfMonitor */;
 		};
@@ -138,7 +138,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		B20000000000000000000012 /* Watch Extension Frameworks */ = {
+		B20000000000000000000012 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -152,8 +152,8 @@
 			isa = PBXGroup;
 			children = (
 				C10000000000000000000002 /* GolfBallDetector.mlpackage */,
-				D20000000000000000000003 /* WatchCaptureBridge.swift */,
-				D20000000000000000000004 /* SessionVideoProcessor.swift */,
+				D20000000000000000000003 /* GolfMonitor/Core/Capture/WatchCaptureBridge.swift */,
+				D20000000000000000000004 /* GolfMonitor/Core/Capture/SessionVideoProcessor.swift */,
 				B10000000000000000000010 /* GolfMonitor */,
 				B10000000000000000000011 /* GolfMonitorTests */,
 				B20000000000000000000004 /* GolfMonitorWatchExtension */,
@@ -247,9 +247,9 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = B2000000000000000000001A /* Build configuration list for PBXNativeTarget "GolfMonitorWatchExtension" */;
 			buildPhases = (
-				B20000000000000000000014 /* Watch Extension Sources */,
-				B20000000000000000000012 /* Watch Extension Frameworks */,
-				B20000000000000000000013 /* Watch Extension Resources */,
+				B20000000000000000000014 /* Sources */,
+				B20000000000000000000012 /* Frameworks */,
+				B20000000000000000000013 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -334,7 +334,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		B20000000000000000000013 /* Watch Extension Resources */ = {
+		B20000000000000000000013 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -348,8 +348,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D20000000000000000000001 /* WatchCaptureBridge.swift in Sources */,
-				D20000000000000000000002 /* SessionVideoProcessor.swift in Sources */,
+				D20000000000000000000001 /* GolfMonitor/Core/Capture/WatchCaptureBridge.swift in Sources */,
+				D20000000000000000000002 /* GolfMonitor/Core/Capture/SessionVideoProcessor.swift in Sources */,
 				C10000000000000000000001 /* GolfBallDetector.mlpackage in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -368,7 +368,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		B20000000000000000000014 /* Watch Extension Sources */ = {
+		B20000000000000000000014 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -599,11 +599,11 @@
 		B2000000000000000000000B /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				COPY_PHASE_STRIP = NO;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = GolfMonitorWatch/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "GolfMonitor Watch";
-				INFOPLIST_KEY_WKApplication = YES;
-				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.example.golfmonitor;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.golfmonitor.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -618,11 +618,11 @@
 		B2000000000000000000000C /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				COPY_PHASE_STRIP = NO;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = GolfMonitorWatch/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "GolfMonitor Watch";
-				INFOPLIST_KEY_WKApplication = YES;
-				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.example.golfmonitor;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.golfmonitor.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -634,7 +634,7 @@
 			};
 			name = Release;
 		};
-		B20000000000000000000018 /* Watch Extension Debug */ = {
+		B20000000000000000000018 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
@@ -643,16 +643,16 @@
 				INFOPLIST_FILE = GolfMonitorWatchExtension/Info.plist;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.golfmonitor.watchkitapp.watchkitextension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 4;
 				WATCHOS_DEPLOYMENT_TARGET = 10.0;
-				SDKROOT = watchos;
-				SUPPORTED_PLATFORMS = "watchos watchsimulator";
 			};
 			name = Debug;
 		};
-		B20000000000000000000019 /* Watch Extension Release */ = {
+		B20000000000000000000019 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
@@ -661,12 +661,12 @@
 				INFOPLIST_FILE = GolfMonitorWatchExtension/Info.plist;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.golfmonitor.watchkitapp.watchkitextension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 4;
 				WATCHOS_DEPLOYMENT_TARGET = 10.0;
-				SDKROOT = watchos;
-				SUPPORTED_PLATFORMS = "watchos watchsimulator";
 			};
 			name = Release;
 		};
@@ -712,8 +712,8 @@
 		B2000000000000000000001A /* Build configuration list for PBXNativeTarget "GolfMonitorWatchExtension" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				B20000000000000000000018 /* Watch Extension Debug */,
-				B20000000000000000000019 /* Watch Extension Release */,
+				B20000000000000000000018 /* Debug */,
+				B20000000000000000000019 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -1,5 +1,9 @@
 import Combine
+import CoreImage
+import CoreMedia
 import Foundation
+import QuartzCore
+import UIKit
 import WatchConnectivity
 
 final class WatchCaptureBridge: NSObject, ObservableObject, WCSessionDelegate {
@@ -10,6 +14,11 @@ final class WatchCaptureBridge: NSObject, ObservableObject, WCSessionDelegate {
     @Published private(set) var isRecording = false
     @Published private(set) var canStartCapture = false
     var commandHandler: ((String) -> (accepted: Bool, reason: String?))?
+
+    private let previewContext = CIContext()
+    private let previewQueue = DispatchQueue(label: "golfmonitor.watch.preview", qos: .utility)
+    private var lastPreviewSentAt: TimeInterval = 0
+    private var previewData: Data?
 
     private override init() {
         super.init()
@@ -28,6 +37,28 @@ final class WatchCaptureBridge: NSObject, ObservableObject, WCSessionDelegate {
             self.isRecording = recording
             self.canStartCapture = canStart
             self.updateApplicationContext()
+        }
+    }
+
+    func sendPreview(_ sampleBuffer: CMSampleBuffer) {
+        let now = CACurrentMediaTime()
+        guard now - lastPreviewSentAt >= 1.0 else { return }
+        lastPreviewSentAt = now
+
+        previewQueue.async { [weak self] in
+            guard let self,
+                  let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+
+            let image = CIImage(cvPixelBuffer: pixelBuffer)
+            let scale = min(320 / image.extent.width, 320 / image.extent.height)
+            let scaledImage = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+            guard let cgImage = self.previewContext.createCGImage(scaledImage, from: scaledImage.extent) else { return }
+            let data = UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.5)
+
+            DispatchQueue.main.async {
+                self.previewData = data
+                self.updateApplicationContext()
+            }
         }
     }
 
@@ -84,12 +115,14 @@ final class WatchCaptureBridge: NSObject, ObservableObject, WCSessionDelegate {
     private func updateApplicationContext() {
         guard WCSession.isSupported() else { return }
         do {
-            try WCSession.default.updateApplicationContext([
+            var context: [String: Any] = [
                 "recording": isRecording,
                 "canStart": canStartCapture,
                 "phoneReachable": WCSession.default.isReachable,
                 "watchPaired": WCSession.default.isPaired && WCSession.default.isWatchAppInstalled
-            ])
+            ]
+            if let previewData { context["preview"] = previewData }
+            try WCSession.default.updateApplicationContext(context)
         } catch {
             NSLog("Could not update Watch capture state: %@", error.localizedDescription)
         }

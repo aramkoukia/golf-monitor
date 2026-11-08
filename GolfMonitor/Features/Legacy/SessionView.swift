@@ -73,6 +73,9 @@ struct SessionView: View {
                 camera.updatePreviewOrientation()
                 watchBridge.activate()
                 watchBridge.commandHandler = handleWatchCommand
+                camera.frameHandler = { sampleBuffer in
+                    watchBridge.sendPreview(sampleBuffer)
+                }
                 updateWatchCaptureState()
             }
             .onChange(of: phase) { _, newPhase in
@@ -98,6 +101,7 @@ struct SessionView: View {
             }
             .onDisappear {
                 watchBridge.commandHandler = nil
+                camera.frameHandler = nil
                 if phase == .sessionRecording {
                     camera.stopRecording()
                 }

@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import UIKit
 import WatchConnectivity
 
 @MainActor
@@ -7,6 +8,7 @@ final class WatchRemoteModel: NSObject, ObservableObject, @preconcurrency WCSess
     @Published private(set) var isPhoneReachable = false
     @Published private(set) var isRecording = false
     @Published private(set) var canStartCapture = false
+    @Published private(set) var previewImage: Image?
     @Published private(set) var status = "Connecting…"
 
     override init() {
@@ -32,7 +34,10 @@ final class WatchRemoteModel: NSObject, ObservableObject, @preconcurrency WCSess
             ["command": command],
             replyHandler: { [weak self] reply in
                 Task { @MainActor in
-                    if reply["accepted"] as? Bool == false {
+                    if reply["accepted"] as? Bool == true {
+                        self?.isRecording = command == "start"
+                        self?.status = command == "start" ? "Session recording" : "Ready to record"
+                    } else {
                         self?.status = reply["reason"] as? String ?? "Phone could not start"
                     }
                 }
@@ -72,6 +77,10 @@ final class WatchRemoteModel: NSObject, ObservableObject, @preconcurrency WCSess
     private func receiveCaptureState(_ context: [String: Any]) {
         isRecording = context["recording"] as? Bool ?? false
         canStartCapture = context["canStart"] as? Bool ?? false
+        if let previewData = context["preview"] as? Data,
+           let image = UIImage(data: previewData) {
+            previewImage = Image(uiImage: image)
+        }
     }
 
     private func updateConnection(_ session: WCSession) {
@@ -79,7 +88,7 @@ final class WatchRemoteModel: NSObject, ObservableObject, @preconcurrency WCSess
         if isRecording {
             status = "Session recording"
         } else if isPhoneReachable {
-            status = canStartCapture ? "Ready to record" : "Open Range on iPhone"
+            status = canStartCapture ? "Ready to record" : "Detect ball on iPhone"
         } else {
             status = "Open GolfMonitor on iPhone"
         }
@@ -102,6 +111,14 @@ struct WatchRemoteView: View {
             }
             .foregroundStyle(.secondary)
 
+            if let previewImage = model.previewImage {
+                previewImage
+                    .resizable()
+                    .scaledToFill()
+                    .frame(height: 62)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+
             Button(action: model.sendCaptureCommand) {
                 VStack(spacing: 5) {
                     Image(systemName: model.isRecording ? "stop.fill" : "record.circle.fill")
@@ -116,8 +133,8 @@ struct WatchRemoteView: View {
                 .background(model.isRecording ? Color.red : Color.orange, in: Circle())
             }
             .buttonStyle(.plain)
-            .disabled(!model.isPhoneReachable || (!model.isRecording && !model.canStartCapture))
-            .opacity(model.isPhoneReachable && (model.isRecording || model.canStartCapture) ? 1 : 0.5)
+            .disabled(!model.isPhoneReachable)
+            .opacity(model.isPhoneReachable ? 1 : 0.5)
             .accessibilityLabel(model.isRecording ? "End range session" : "Start range session")
         }
         .padding(.horizontal, 8)
