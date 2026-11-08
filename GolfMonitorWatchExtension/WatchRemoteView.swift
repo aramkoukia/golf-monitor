@@ -10,7 +10,6 @@ final class WatchRemoteModel: NSObject, ObservableObject, @preconcurrency WCSess
     @Published private(set) var canStartCapture = false
     @Published private(set) var previewImage: Image?
     @Published private(set) var status = "Connecting…"
-
     override init() {
         super.init()
         guard WCSession.isSupported() else {
@@ -29,9 +28,8 @@ final class WatchRemoteModel: NSObject, ObservableObject, @preconcurrency WCSess
             status = "Command queued — activating Watch link"
             return
         }
-        // Queue every command as a durable fallback, then send live as an
-        // immediate optimization when the phone is reachable.
-        WCSession.default.transferUserInfo(["command": command])
+        let requestID = UUID().uuidString
+        WCSession.default.transferUserInfo(["command": command, "requestID": requestID])
 
         guard WCSession.default.isReachable else {
             status = command == "start" ? "Start queued — keep Range open" : "Stop queued — keep Range open"
@@ -40,7 +38,7 @@ final class WatchRemoteModel: NSObject, ObservableObject, @preconcurrency WCSess
 
         status = command == "start" ? "Starting swing…" : "Ending swing…"
         WCSession.default.sendMessage(
-            ["command": command],
+            ["command": command, "requestID": requestID],
             replyHandler: { [weak self] reply in
                 Task { @MainActor in
                     if reply["accepted"] as? Bool == true {
@@ -52,7 +50,7 @@ final class WatchRemoteModel: NSObject, ObservableObject, @preconcurrency WCSess
                 }
             },
             errorHandler: { [weak self] error in
-                WCSession.default.transferUserInfo(["command": command])
+                WCSession.default.transferUserInfo(["command": command, "requestID": requestID])
                 Task { @MainActor in
                     self?.status = "Command queued — keep Range open"
                     NSLog("Watch capture message failed: %@", error.localizedDescription)
@@ -132,8 +130,10 @@ final class WatchRemoteModel: NSObject, ObservableObject, @preconcurrency WCSess
         isPhoneReachable = session.activationState == .activated && session.isReachable
         if isRecording {
             status = "Swing armed — swing now"
-        } else if isPhoneReachable {
+        } else if isPhoneReachable && canStartCapture {
             status = "Ready for swing"
+        } else if isPhoneReachable {
+            status = "Waiting for iPhone Range"
         } else {
             status = "Open GolfMonitor on iPhone"
         }

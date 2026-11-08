@@ -20,6 +20,17 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.example.golfmonitor.watch</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>golfmonitor</string>
+			</array>
+		</dict>
+	</array>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>GolfMonitor listens for the sound of impact so it can capture your swing hands-free. Audio is analyzed on your iPhone and never recorded or uploaded.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

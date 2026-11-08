@@ -19,6 +19,11 @@ struct GolfMonitorApp: App {
                     WatchCaptureBridge.shared.activate()
                     applyDebugLaunch()
                 }
+                .onOpenURL { url in
+                    if url.scheme == "golfmonitor", url.host == "open-range" {
+                        router.tab = .range
+                    }
+                }
                 .onReceive(NotificationCenter.default.publisher(for: .watchCaptureOpenRange)) { _ in
                     router.tab = .range
                 }

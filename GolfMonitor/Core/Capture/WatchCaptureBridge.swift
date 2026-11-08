@@ -19,7 +19,11 @@ final class WatchCaptureBridge: NSObject, ObservableObject, WCSessionDelegate {
     @Published private(set) var canStartCapture = false
     var commandHandler: ((String) -> (accepted: Bool, reason: String?))? {
         didSet {
-            if commandHandler != nil { flushPendingCommands() }
+            if commandHandler != nil {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                    self.flushPendingCommands()
+                }
+            }
         }
     }
 
@@ -28,6 +32,7 @@ final class WatchCaptureBridge: NSObject, ObservableObject, WCSessionDelegate {
     private var lastPreviewSentAt: TimeInterval = 0
     private var previewData: Data?
     private var pendingCommands: [String] = []
+    private var commandResults: [String: (accepted: Bool, reason: String?)] = [:]
 
     private override init() {
         super.init()
@@ -46,6 +51,7 @@ final class WatchCaptureBridge: NSObject, ObservableObject, WCSessionDelegate {
             self.isRecording = recording
             self.canStartCapture = canStart
             self.updateApplicationContext()
+            if canStart { self.flushPendingCommands() }
         }
     }
 
@@ -67,14 +73,15 @@ final class WatchCaptureBridge: NSObject, ObservableObject, WCSessionDelegate {
             if let data {
                 DispatchQueue.main.async {
                     self.previewData = data
-                    self.updateApplicationContext()
 
                     let session = WCSession.default
-                    session.transferUserInfo(["preview": data])
                     if session.activationState == .activated && session.isReachable {
                         session.sendMessage(["preview": data], replyHandler: nil) { error in
                             NSLog("Live watch preview delivery failed: %@", error.localizedDescription)
+                            session.transferUserInfo(["preview": data])
                         }
+                    } else {
+                        session.transferUserInfo(["preview": data])
                     }
                 }
             }
@@ -107,8 +114,9 @@ final class WatchCaptureBridge: NSObject, ObservableObject, WCSessionDelegate {
     func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
         guard let command = userInfo["command"] as? String,
               command == "start" || command == "stop" else { return }
+        let requestID = userInfo["requestID"] as? String
         DispatchQueue.main.async {
-            self.handleCommand(command)
+            _ = self.handleCommand(command, requestID: requestID)
         }
     }
 
@@ -130,8 +138,9 @@ final class WatchCaptureBridge: NSObject, ObservableObject, WCSessionDelegate {
             replyHandler(["accepted": false, "reason": "Unknown command"])
             return
         }
+        let requestID = message["requestID"] as? String
         DispatchQueue.main.async {
-            let response = self.handleCommand(command)
+            let response = self.handleCommand(command, requestID: requestID)
             NSLog("Watch command live: %@ accepted=%@ reason=%@", command,
                   response.accepted ? "yes" : "no", response.reason ?? "")
             self.updateApplicationContext()
@@ -142,28 +151,51 @@ final class WatchCaptureBridge: NSObject, ObservableObject, WCSessionDelegate {
         }
     }
 
-    private func handleCommand(_ command: String) -> (accepted: Bool, reason: String?) {
+    private func handleCommand(_ command: String, requestID: String? = nil) -> (accepted: Bool, reason: String?) {
+        if let requestID,
+           let cached = commandResults[requestID] {
+            return cached
+        }
+
         NotificationCenter.default.post(name: .watchCaptureOpenRange, object: nil)
 
         guard let commandHandler else {
             if pendingCommands.last != command { pendingCommands.append(command) }
-            return (true, "Opening GolfMonitor Range on the iPhone.")
+            return (false, "Open GolfMonitor and keep the Range screen visible.")
         }
 
         let response = commandHandler(command)
+        if response.accepted {
+            if command == "start" {
+                isRecording = true
+                canStartCapture = false
+            } else {
+                isRecording = false
+            }
+            updateApplicationContext()
+        } else if command == "start" {
+            if pendingCommands.last != command { pendingCommands.append(command) }
+        }
+        if let requestID {
+            commandResults[requestID] = response
+            if commandResults.count > 50 {
+                commandResults.removeValue(forKey: commandResults.keys.first ?? "")
+            }
+        }
         updateApplicationContext()
         return response
     }
 
     private func flushPendingCommands() {
         guard let commandHandler else { return }
-        let commands = pendingCommands
-        pendingCommands.removeAll()
-        for command in commands {
+        var remaining: [String] = []
+        for command in pendingCommands {
             let response = commandHandler(command)
             NSLog("Watch command pending: %@ accepted=%@ reason=%@", command,
                   response.accepted ? "yes" : "no", response.reason ?? "")
+            if !response.accepted { remaining.append(command) }
         }
+        pendingCommands = remaining
         updateApplicationContext()
     }
 
