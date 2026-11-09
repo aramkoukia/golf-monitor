@@ -52,6 +52,19 @@ struct SessionView: View {
 
     private var clipDuration: TimeInterval { TimeInterval(clipSeconds) }
 
+    private func restartCameraAfterSheet() {
+        camera.requestPermission()
+    }
+
+    @ViewBuilder
+    private var sessionShareSheet: some View {
+        if let img = tracerImage {
+            ShareSheet(items: [img])
+        } else if let sessionVideoURL {
+            ShareSheet(items: [sessionVideoURL])
+        }
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -68,13 +81,16 @@ struct SessionView: View {
             }
             .toolbar(.hidden, for: .navigationBar)
             .onAppear {
+                UIApplication.shared.isIdleTimerDisabled = true
                 UIDevice.current.beginGeneratingDeviceOrientationNotifications()
                 camera.requestPermission()
                 camera.updatePreviewOrientation()
-                watchBridge.activate()
                 watchBridge.commandHandler = handleWatchCommand
-                camera.frameHandler = { sampleBuffer in
-                    watchBridge.sendPreview(sampleBuffer)
+                if watchBridge.previewStreamingRequested {
+                    camera.frameHandler = { sampleBuffer in
+                        watchBridge.refreshPreviewRequest()
+                        watchBridge.sendPreview(sampleBuffer)
+                    }
                 }
                 updateWatchCaptureState()
             }
@@ -83,6 +99,16 @@ struct SessionView: View {
             }
             .onChange(of: camera.isSessionRunning) { _, _ in
                 updateWatchCaptureState()
+            }
+            .onChange(of: watchBridge.previewStreamingRequested) { _, requested in
+                if requested {
+                    camera.frameHandler = { sampleBuffer in
+                        watchBridge.refreshPreviewRequest()
+                        watchBridge.sendPreview(sampleBuffer)
+                    }
+                } else {
+                    camera.frameHandler = nil
+                }
             }
             .onChange(of: detectedBall != nil) { _, _ in
                 updateWatchCaptureState()
@@ -100,7 +126,9 @@ struct SessionView: View {
                 UserDefaults.standard.set(club.rawValue, forKey: "golfmonitor.lastClub")
             }
             .onDisappear {
+                UIApplication.shared.isIdleTimerDisabled = false
                 watchBridge.commandHandler = nil
+                watchBridge.setPreviewRequested(false)
                 camera.frameHandler = nil
                 if phase == .sessionRecording {
                     camera.stopRecording()
@@ -111,15 +139,8 @@ struct SessionView: View {
                     store.endSession(activeSessionID)
                 }
             }
-            .sheet(isPresented: $showShare, onDismiss: {
-                // The sheet can stop the session via onDisappear; restart it.
-                camera.requestPermission()
-            }) {
-                if let img = tracerImage {
-                    ShareSheet(items: [img])
-                } else if let sessionVideoURL {
-                    ShareSheet(items: [sessionVideoURL])
-                }
+            .sheet(isPresented: $showShare, onDismiss: restartCameraAfterSheet) {
+                sessionShareSheet
             }
         }
     }
@@ -1153,24 +1174,25 @@ struct SessionView: View {
     }
 
     private func handleWatchCommand(_ command: String) -> (accepted: Bool, reason: String?) {
-        if command == "start" {
-            guard phase == .idle,
-                  camera.isAuthorized,
-                  camera.isSessionRunning else {
-                let reason = "Open Range and wait for the live camera before starting."
-                detectMessage = "Watch remote: \(reason)"
-                return (false, reason)
-            }
+        if command == WatchConnectivityConstants.start {
+            if phase != .idle { return (false, "Already recording or processing") }
+            if !camera.isAuthorized { return (false, "Camera access is not available") }
+            if !camera.isSessionRunning { return (false, "Camera not running") }
+            if router.rangeContext.isFinished() { return (false, "This practice is finished") }
+            guard canRecord else { return (false, "Camera or Range setup is not ready") }
+            camera.lockFocusAndExposure()
             isSessionMode = false
             startShot()
+            watchBridge.updateCaptureState(isRecording: true, canStart: false)
             return (true, nil)
         }
-        if command == "stop" {
+        if command == WatchConnectivityConstants.stop {
             if phase == .countdown {
                 shotTask?.cancel()
                 shotTask = nil
                 phase = .idle
                 camera.unlockFocusAndExposure()
+                updateWatchCaptureState()
                 return (true, nil)
             }
             if phase == .recording {
@@ -1189,7 +1211,7 @@ struct SessionView: View {
     private func updateWatchCaptureState() {
         watchBridge.updateCaptureState(
             isRecording: phase == .countdown || phase == .recording || phase == .sessionRecording,
-            canStart: camera.isAuthorized && camera.isSessionRunning && phase == .idle
+            canStart: canRecord
         )
     }
 

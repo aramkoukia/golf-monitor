@@ -20,20 +20,6 @@
                ReferencedContainer = "container:GolfMonitor.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
-         <BuildActionEntry
-            buildForTesting="YES"
-            buildForRunning="YES"
-            buildForProfiling="YES"
-            buildForArchiving="YES"
-            buildForAnalyzing="YES">
-            <BuildableReference
-               BuildableIdentifier="primary"
-               BlueprintIdentifier="B20000000000000000000006"
-               BuildableName="GolfMonitorWatch.app"
-               BlueprintName="GolfMonitorWatch"
-               ReferencedContainer="container:GolfMonitor.xcodeproj">
-            </BuildableReference>
-         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction

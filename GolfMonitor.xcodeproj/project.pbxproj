@@ -12,6 +12,7 @@
 		C10000000000000000000001 /* GolfBallDetector.mlpackage in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000002 /* GolfBallDetector.mlpackage */; };
 		D20000000000000000000001 /* GolfMonitor/Core/Capture/WatchCaptureBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000003 /* GolfMonitor/Core/Capture/WatchCaptureBridge.swift */; };
 		D20000000000000000000002 /* GolfMonitor/Core/Capture/SessionVideoProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000004 /* GolfMonitor/Core/Capture/SessionVideoProcessor.swift */; };
+		D20000000000000000000007 /* GolfMonitor/Core/Capture/WatchConnectivityConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000006 /* GolfMonitor/Core/Capture/WatchConnectivityConstants.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -71,6 +72,7 @@
 		C10000000000000000000002 /* GolfBallDetector.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = GolfBallDetector.mlpackage; sourceTree = "<group>"; };
 		D20000000000000000000003 /* GolfMonitor/Core/Capture/WatchCaptureBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GolfMonitor/Core/Capture/WatchCaptureBridge.swift; sourceTree = "<group>"; };
 		D20000000000000000000004 /* GolfMonitor/Core/Capture/SessionVideoProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GolfMonitor/Core/Capture/SessionVideoProcessor.swift; sourceTree = "<group>"; };
+		D20000000000000000000006 /* GolfMonitor/Core/Capture/WatchConnectivityConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GolfMonitor/Core/Capture/WatchConnectivityConstants.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -154,6 +156,7 @@
 				C10000000000000000000002 /* GolfBallDetector.mlpackage */,
 				D20000000000000000000003 /* GolfMonitor/Core/Capture/WatchCaptureBridge.swift */,
 				D20000000000000000000004 /* GolfMonitor/Core/Capture/SessionVideoProcessor.swift */,
+				D20000000000000000000006 /* GolfMonitor/Core/Capture/WatchConnectivityConstants.swift */,
 				B10000000000000000000010 /* GolfMonitor */,
 				B10000000000000000000011 /* GolfMonitorTests */,
 				B20000000000000000000004 /* GolfMonitorWatchExtension */,
@@ -372,6 +375,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D20000000000000000000007 /* GolfMonitor/Core/Capture/WatchConnectivityConstants.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -17,34 +17,26 @@ final class WatchCaptureBridge: NSObject, ObservableObject, WCSessionDelegate {
     @Published private(set) var isReachable = false
     @Published private(set) var isRecording = false
     @Published private(set) var canStartCapture = false
-    var commandHandler: ((String) -> (accepted: Bool, reason: String?))? {
-        didSet {
-            if commandHandler != nil {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-                    self?.flushPendingCommands()
-                }
-            }
-        }
-    }
+    @Published private(set) var previewStreamingRequested = false
 
-    private let previewContext = CIContext()
+    var openRangeHandler: (() -> Void)?
+    var commandHandler: ((String) -> (accepted: Bool, reason: String?))?
+
+    private let previewContext = CIContext(options: [.useSoftwareRenderer: false])
     private let previewQueue = DispatchQueue(label: "golfmonitor.watch.preview", qos: .utility)
+    private var previewSendInFlight = false
+    private var previewRequestedAt: TimeInterval = 0
     private var lastPreviewSentAt: TimeInterval = 0
-    private var previewData: Data?
-    private var pendingCommands: [String] = []
     private var commandResults: [String: (accepted: Bool, reason: String?)] = [:]
     private var diagnostic = "Phone ready"
 
-    private override init() {
-        super.init()
-    }
+    private override init() { super.init() }
 
     func activate() {
         guard WCSession.isSupported() else { return }
         let session = WCSession.default
-        session.delegate = self
-        session.activate()
-        refreshState()
+        if session.delegate !== self { session.delegate = self }
+        if session.activationState == .activated { refreshState() } else { session.activate() }
     }
 
     func updateCaptureState(isRecording recording: Bool, canStart: Bool) {
@@ -52,188 +44,152 @@ final class WatchCaptureBridge: NSObject, ObservableObject, WCSessionDelegate {
             self.isRecording = recording
             self.canStartCapture = canStart
             self.diagnostic = recording ? "Recording on phone" : (canStart ? "Phone camera ready" : "Waiting for phone camera")
+            if recording { self.setPreviewRequested(false) }
             self.updateApplicationContext()
-            if canStart { self.flushPendingCommands() }
         }
     }
 
+    func setPreviewRequested(_ requested: Bool) {
+        previewRequestedAt = requested ? CACurrentMediaTime() : 0
+        previewStreamingRequested = requested
+        if !requested { previewSendInFlight = false }
+    }
+
+    func refreshPreviewRequest() {
+        guard previewStreamingRequested else { return }
+        previewRequestedAt = CACurrentMediaTime()
+    }
+
     func sendPreview(_ sampleBuffer: CMSampleBuffer) {
+        guard previewStreamingRequested else { return }
+        guard CACurrentMediaTime() - previewRequestedAt < WatchConnectivityConstants.commandTTL else {
+            DispatchQueue.main.async { self.setPreviewRequested(false) }
+            return
+        }
         let now = CACurrentMediaTime()
-        guard now - lastPreviewSentAt >= 1.0 else { return }
+        guard now - lastPreviewSentAt >= 0.2 else { return }
+        guard !previewSendInFlight else { return }
         lastPreviewSentAt = now
+        previewSendInFlight = true
 
         previewQueue.async { [weak self] in
             guard let self,
-                  let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
-
+                  let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
+                    DispatchQueue.main.async { self?.previewSendInFlight = false }
+                    return
+                  }
             let image = CIImage(cvPixelBuffer: pixelBuffer)
-            let scale = min(320 / image.extent.width, 320 / image.extent.height)
-            let scaledImage = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-            guard let cgImage = self.previewContext.createCGImage(scaledImage, from: scaledImage.extent) else { return }
-            let data = UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.5)
-
-            if let data {
-                DispatchQueue.main.async {
-                    self.previewData = data
-                    self.updateApplicationContext()
-
-                    let session = WCSession.default
-                    if session.activationState == .activated && session.isReachable {
-                        session.sendMessage(["preview": data], replyHandler: nil) { error in
-                            NSLog("Live watch preview delivery failed: %@", error.localizedDescription)
-                            session.transferUserInfo(["preview": data])
-                        }
-                    } else {
-                        session.transferUserInfo(["preview": data])
-                    }
+            let scale = min(240 / max(image.extent.width, 1), 240 / max(image.extent.height, 1))
+            let scaled = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+            guard let cgImage = self.previewContext.createCGImage(scaled, from: scaled.extent),
+                  let data = UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.4) else {
+                DispatchQueue.main.async { self.previewSendInFlight = false }
+                return
+            }
+            DispatchQueue.main.async {
+                let session = WCSession.default
+                guard self.previewStreamingRequested,
+                      session.activationState == .activated,
+                      session.isReachable else {
+                    self.previewSendInFlight = false
+                    return
                 }
+                session.sendMessage(
+                    [WatchConnectivityConstants.preview: data],
+                    replyHandler: { [weak self] _ in
+                        DispatchQueue.main.async { self?.previewSendInFlight = false }
+                    },
+                    errorHandler: { [weak self] _ in
+                        DispatchQueue.main.async { self?.previewSendInFlight = false }
+                    }
+                )
             }
         }
     }
 
-    func session(
-        _ session: WCSession,
-        activationDidCompleteWith activationState: WCSessionActivationState,
-        error: Error?
-    ) {
-        DispatchQueue.main.async {
-            self.refreshState()
-            self.updateApplicationContext()
-        }
+    func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
+        DispatchQueue.main.async { self.refreshState(); self.updateApplicationContext() }
     }
-
     func sessionDidBecomeInactive(_ session: WCSession) {}
-
-    func sessionDidDeactivate(_ session: WCSession) {
-        session.activate()
-    }
-
+    func sessionDidDeactivate(_ session: WCSession) { session.activate() }
     func sessionReachabilityDidChange(_ session: WCSession) {
         DispatchQueue.main.async {
             self.refreshState()
+            if !session.isReachable { self.setPreviewRequested(false) }
         }
     }
 
     func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
-        guard let command = userInfo["command"] as? String,
-              command == "start" || command == "stop" || command == "open_camera" else { return }
-        let requestID = userInfo["requestID"] as? String
-        DispatchQueue.main.async {
-            _ = self.handleCommand(command, requestID: requestID)
-        }
+        guard let command = userInfo[WatchConnectivityConstants.command] as? String else { return }
+        let requestID = userInfo[WatchConnectivityConstants.requestID] as? String
+        handlePayload(command: command, requestID: requestID, timestamp: userInfo[WatchConnectivityConstants.timestamp] as? TimeInterval)
     }
 
-    func session(
-        _ session: WCSession,
-        didReceiveMessage message: [String: Any],
-        replyHandler: @escaping ([String: Any]) -> Void
-    ) {
-        if message["requestState"] as? Bool == true {
-            replyHandler([
-                "recording": isRecording,
-                "canStart": canStartCapture,
-                "preview": previewData as Any,
-                "diagnostic": diagnostic,
-                "phoneReachable": true
-            ])
+    func session(_ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void) {
+        if message[WatchConnectivityConstants.requestState] as? Bool == true {
+            replyHandler([WatchConnectivityConstants.recording: isRecording,
+                          WatchConnectivityConstants.canStart: canStartCapture,
+                          WatchConnectivityConstants.diagnostic: diagnostic,
+                          WatchConnectivityConstants.phoneReachable: true])
             return
         }
-        guard let command = message["command"] as? String,
-              command == "start" || command == "stop" || command == "open_camera" else {
-            replyHandler(["accepted": false, "reason": "Unknown command"])
+        guard let command = message[WatchConnectivityConstants.command] as? String else {
+            replyHandler([WatchConnectivityConstants.accepted: false, WatchConnectivityConstants.reason: "Unknown command"])
             return
         }
-        let requestID = message["requestID"] as? String
-        DispatchQueue.main.async {
-            let response = self.handleCommand(command, requestID: requestID)
-            NSLog("Watch command live: %@ accepted=%@ reason=%@", command,
-                  response.accepted ? "yes" : "no", response.reason ?? "")
-            self.updateApplicationContext()
-            replyHandler([
-                "accepted": response.accepted,
-                "reason": response.reason ?? ""
-            ])
-        }
+        let response = handlePayload(command: command,
+                                     requestID: message[WatchConnectivityConstants.requestID] as? String,
+                                     timestamp: message[WatchConnectivityConstants.timestamp] as? TimeInterval)
+        replyHandler([WatchConnectivityConstants.accepted: response.accepted,
+                      WatchConnectivityConstants.reason: response.reason ?? ""])
     }
 
-    private func handleCommand(_ command: String, requestID: String? = nil) -> (accepted: Bool, reason: String?) {
+    private func handlePayload(command: String, requestID: String?, timestamp: TimeInterval?) -> (accepted: Bool, reason: String?) {
+        if let timestamp, Date().timeIntervalSince1970 - timestamp > WatchConnectivityConstants.commandTTL {
+            return (false, "Command expired — tap Start Swing again")
+        }
+        if command == WatchConnectivityConstants.previewOn {
+            setPreviewRequested(true)
+            return (true, nil)
+        }
+        if command == WatchConnectivityConstants.previewOff {
+            setPreviewRequested(false)
+            return (true, nil)
+        }
+        if requestID == nil || timestamp == nil { return (false, "Invalid command timestamp") }
+        if let requestID, let cached = commandResults[requestID] { return cached }
+
         diagnostic = "Phone received \(command)"
-        NSLog("Watch command received: %@ request=%@", command, requestID ?? "none")
         updateApplicationContext()
-        if let requestID,
-           let cached = commandResults[requestID] {
-            return cached
-        }
 
-        NotificationCenter.default.post(name: .watchCaptureOpenRange, object: nil)
-
-        if command == "open_camera" {
-            diagnostic = "Opening iPhone Range"
+        if command == WatchConnectivityConstants.openCamera {
+            openRangeHandler?()
             NotificationCenter.default.post(name: .watchCaptureOpenRange, object: nil)
             if let url = URL(string: "golfmonitor://open-range") {
-                DispatchQueue.main.async {
-                    UIApplication.shared.open(url, options: [:], completionHandler: nil)
-                }
+                DispatchQueue.main.async { UIApplication.shared.open(url, options: [:], completionHandler: nil) }
             }
-            schedulePendingRetry(attempts: 12)
-            let response = (true, nil as String?)
-            if let requestID { commandResults[requestID] = response }
-            updateApplicationContext()
-            return response
+            return cache(requestID: requestID, response: (true, nil))
         }
 
+        guard command == WatchConnectivityConstants.start || command == WatchConnectivityConstants.stop else {
+            return (false, "Unknown command")
+        }
         guard let commandHandler else {
-            if pendingCommands.last != command { pendingCommands.append(command) }
-            schedulePendingRetry(attempts: 12)
-            // Rejection is intentionally not cached: a later live/durable delivery
-            // may arrive after Range has mounted and should be allowed to retry.
-            return (false, "Opening Range — wait for the live camera, then press Start Swing again.")
+            return (false, "Open GolfMonitor → Range and wait for the live camera")
         }
-
         let response = commandHandler(command)
         if response.accepted {
-            if command == "start" {
-                isRecording = true
-                canStartCapture = false
-            } else {
-                isRecording = false
-                canStartCapture = true
-            }
+            isRecording = command == WatchConnectivityConstants.start
+            canStartCapture = !isRecording
             updateApplicationContext()
-        } else if command == "start" {
-            if pendingCommands.last != command { pendingCommands.append(command) }
         }
-        // Cache successful replies only; failures are never permanent so reconnects can recover.
-        if response.accepted, let requestID {
-            commandResults[requestID] = response
-            if commandResults.count > 50 {
-                commandResults.removeValue(forKey: commandResults.keys.first ?? "")
-            }
-        }
-        updateApplicationContext()
+        return response.accepted ? cache(requestID: requestID, response: response) : response
+    }
+
+    private func cache(requestID: String?, response: (accepted: Bool, reason: String?)) -> (accepted: Bool, reason: String?) {
+        if let requestID { commandResults[requestID] = response }
+        if commandResults.count > 50 { commandResults.removeValue(forKey: commandResults.keys.first ?? "") }
         return response
-    }
-
-    private func schedulePendingRetry(attempts: Int) {
-        guard attempts > 0 else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            guard let self else { return }
-            if !self.pendingCommands.isEmpty { self.flushPendingCommands() }
-            if !self.pendingCommands.isEmpty { self.schedulePendingRetry(attempts: attempts - 1) }
-        }
-    }
-
-    private func flushPendingCommands() {
-        guard let commandHandler else { return }
-        var remaining: [String] = []
-        for command in pendingCommands {
-            let response = commandHandler(command)
-            NSLog("Watch command pending: %@ accepted=%@ reason=%@", command,
-                  response.accepted ? "yes" : "no", response.reason ?? "")
-            if !response.accepted { remaining.append(command) }
-        }
-        pendingCommands = remaining
-        updateApplicationContext()
     }
 
     private func refreshState() {
@@ -246,15 +202,13 @@ final class WatchCaptureBridge: NSObject, ObservableObject, WCSessionDelegate {
     private func updateApplicationContext() {
         guard WCSession.isSupported() else { return }
         do {
-            var context: [String: Any] = [
-                "recording": isRecording,
-                "canStart": canStartCapture,
-                "phoneReachable": WCSession.default.isReachable,
-                "watchPaired": WCSession.default.isPaired && WCSession.default.isWatchAppInstalled,
-                "diagnostic": diagnostic
-            ]
-            if let previewData { context["preview"] = previewData }
-            try WCSession.default.updateApplicationContext(context)
+            try WCSession.default.updateApplicationContext([
+                WatchConnectivityConstants.recording: isRecording,
+                WatchConnectivityConstants.canStart: canStartCapture,
+                WatchConnectivityConstants.phoneReachable: WCSession.default.isReachable,
+                WatchConnectivityConstants.watchPaired: WCSession.default.isPaired && WCSession.default.isWatchAppInstalled,
+                WatchConnectivityConstants.diagnostic: diagnostic
+            ])
         } catch {
             NSLog("Could not update Watch capture state: %@", error.localizedDescription)
         }

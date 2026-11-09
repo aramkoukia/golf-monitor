@@ -8,6 +8,10 @@ struct GolfMonitorApp: App {
     @StateObject private var settings = SettingsStore()
     @StateObject private var router = AppRouter()
 
+    init() {
+        WatchCaptureBridge.shared.activate()
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()
@@ -16,7 +20,12 @@ struct GolfMonitorApp: App {
                 .environmentObject(router)
                 .preferredColorScheme(.dark)
                 .task {
-                    WatchCaptureBridge.shared.activate()
+                    let bridge = WatchCaptureBridge.shared
+                    bridge.openRangeHandler = {
+                        DispatchQueue.main.async {
+                            router.tab = .range
+                        }
+                    }
                     applyDebugLaunch()
                 }
                 .onOpenURL { url in
