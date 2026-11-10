@@ -116,9 +116,8 @@ final class CoreMLPoseEstimator: PoseEstimating {
         let shape = arr.shape.map(\.intValue)
         guard shape.count == 3, shape[1] == 56 else { return nil }
         let anchors = shape[2]
-        let ptr = arr.dataPointer.bindMemory(to: Float.self, capacity: arr.count)
-        let f32 = arr.dataType == .float32
-        func v(_ ch: Int, _ a: Int) -> Float { f32 ? ptr[ch * anchors + a] : arr[ch * anchors + a].floatValue }
+        let read = MultiArrayReader(arr)
+        func v(_ ch: Int, _ a: Int) -> Float { read[0, ch, a] }
 
         // Highest-scoring large person (score × sqrt(area) favours the golfer
         // in the foreground over people walking behind).

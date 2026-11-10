@@ -1,174 +1,125 @@
 # GolfMonitor
 
-A budget iPhone launch monitor for the driving range. Mount your iPhone on a
-tripod side-on to the hitting zone, record your swing in slow motion
-(240 fps where supported), and get ball speed, launch angle, club speed,
-smash factor, carry, tempo, and a shot tracer — like a poor man's TrackMan.
+A launch monitor and swing analyzer that runs entirely on your iPhone, with an
+Apple Watch remote. Put the phone on a tripod, press record (on the phone or
+the watch), set up, take practice swings, hit the ball, press stop. GolfMonitor
+finds the real strike, measures it, and shows the numbers on both screens.
 
-**Status: v1, honest prototype.** It measures what a single phone camera can
-measure well, estimates the rest, and tells you which is which.
+- **One-button routine.** A single continuous recording covers everything.
+  Practice swings are detected and ignored. The shot is the swing during which
+  the teed ball disappears.
+- **No separate ball-detection step.** The bundled ball detector runs in the
+  background, locks onto the ball (green brackets in the viewfinder) and uses
+  its measured size to calibrate distances automatically.
+- **Apple Watch remote.** It shows a live camera preview, starts and stops the
+  recording, and shows the result (carry, ball speed, launch) with haptics for
+  each state. When the watch starts a recording, the phone switches to the
+  Range screen and shows that it is recording.
+- **Save to Photos (optional).** Profile › Photos can save each analyzed shot
+  clip, and optionally the full recording, to your photo library.
+- **Fully on-device.** Core ML, Vision and AVFoundation only. No account, no
+  server, no network calls, no third-party packages.
 
-## Open in Xcode & run on your iPhone
+## Run it
 
-1. Copy this folder to your Mac and double-click `GolfMonitor.xcodeproj`.
-2. In the project editor, select the **GolfMonitor** target → **Signing & Capabilities**:
-   - Set **Team** to your Apple ID (Xcode → Settings → Accounts to add it).
-   - Change the **Bundle Identifier** from `com.example.golfmonitor` to something
-     unique, e.g. `com.yourname.golfmonitor` (Apple requires a globally unique ID).
-   - For Watch support, also set the same Team on **GolfMonitorWatch** and
-     **GolfMonitorWatchExtension**. Give the Watch app a unique ID such as
-     `com.yourname.golfmonitor.watchkitapp` and the extension an ID such as
-     `com.yourname.golfmonitor.watchkitapp.watchkitextension`. Update the Watch
-     app's **WKCompanionAppBundleIdentifier** to match the iPhone app ID and
-     the extension's **WKAppBundleIdentifier** to match the Watch app ID.
-3. Connect your iPhone via cable, select the **GolfMonitor** scheme and your iPhone as the run destination, then press **Run** (⌘R). The embedded watch app is included automatically when it is signed correctly.
-4. To run or debug the watch UI directly, keep the iPhone and paired Apple Watch available, select the **GolfMonitorWatch** scheme in the scheme menu, choose your physical Watch or an Apple Watch simulator as the destination, and press **Run** (⌘R).
-5. If this is your first physical-device watch install, unlock both devices and accept the developer/partner trust prompts. In the iPhone **Watch** app, confirm that GolfMonitor appears under **My Watch → Available Apps** or **Installed**.
+1. Open `GolfMonitor.xcodeproj` in Xcode 26.
+2. In **Signing & Capabilities**, choose your team for the **GolfMonitor** and
+   **GolfMonitorWatch** targets. If you change bundle IDs, keep the watch ID as
+   `<phone id>.watchkitapp` and update `WKCompanionAppBundleIdentifier` in
+   `GolfMonitorWatch/Info.plist` to match.
+3. Select the **GolfMonitor** scheme and your iPhone, then Run. The watch app is
+   embedded in the iPhone app (`GolfMonitor.app/Watch/`) and installs on the
+   paired watch automatically. Check the iPhone **Watch** app › Available Apps
+   if it doesn't appear. To debug the watch UI, run the **GolfMonitorWatch**
+   scheme on the watch.
 
-**Free Apple ID sideloading notes:** with a free (non-paid) Apple developer
-account, Xcode will sign the app for 7 days — after that you re-run from Xcode
-to refresh it. On the phone, first launch may require trusting the developer
-certificate under Settings → General → VPN & Device Management. A paid
-developer account ($99/yr) removes the 7-day limit.
+Requires iOS 18+ (every iPhone that runs it records 240 fps) and watchOS 10+.
 
-Requirements: iPhone with a 240 fps slow-mo mode (iPhone 6s and later all
-support 240 fps at 720p), iOS 17+.
-
-## Setting up at the range
+**Simulator:** the iPhone Simulator has no camera, so a virtual camera loops a
+bundled CC0 range session (setup → practice swing → strike) and "recording"
+feeds that session through the real pipeline. Launch arguments for hands-free
+checks:
 
 ```
-              TARGET LINE
-  ──────────────────────────────────────►  (ball flies this way)
-
-            ●  ball on tee/mat
-
-  ─┬─
-   │  tripod, phone in LANDSCAPE
-   │  2.5–4 m from the ball
-   │  lens at ball height
-   │
-  ═╧═  camera looks along this axis
-
-  ◄──────── 90° ────────►
-  phone ──── ball ──── target
+-gm.skipOnboarding -gm.autostart 6     # record 6 s, stop, analyze, reveal
+-gm.reset -gm.demo -gm.tab library     # demo library
 ```
 
-- **Position:** tripod exactly 90° to your target line (pure side view),
-  phone in **landscape**, and outside the golfer's swing and ball paths. The
-  current detector accepts a phone-to-ball distance of **0.5–2.0 m**; don't
-  put the phone anywhere it could be struck to meet that range.
-- **Framing:** ball in the lower-center of frame with ~1–2 m of sky above it
-  so the early ball flight stays in frame. Tap **Record Shot** once framed —
-  the app locks focus/exposure so it doesn't hunt mid-swing.
-- **Lighting:** works best in daylight or under bright range lights. The ball
-  is detected as a bright-white blob — a scuffed yellow range ball in dim
-  light will struggle. Keep the lens clean.
-- **Background:** a clean sky or net behind the ball flight path tracks far
-  better than trees or other golfers moving behind it.
+On the watch: `-gm.autostart 7` presses Start and then Stop over
+WatchConnectivity, and `-gm.mockState result` shows a canned screen
+(DEBUG builds only).
 
-## Ball detection (Session tab — repeat after moving the phone)
+## At the range
 
-1. Keep the ball 0.5–2.0 m from the camera, framed clearly, with the phone
-   safely outside the golfer's swing and ball paths.
-2. Tap **Detect ball**. The app measures the ball diameter and computes the
-   pixel→meter scale from the real ball diameter (42.67 mm). A successful
-   detection saves calibration and unlocks **Record Shot**.
-3. If detection fails, improve lighting and framing, then try again. Re-detect
-   after moving the phone.
+```
+   TARGET ───────────────────────────►   ball flies across the frame
 
-## How each metric is computed
+             ●  ball (teed or on the mat)
+        2–3 m
+   ┌─┐
+   │▯│  phone on a tripod, side-on (face-on to you), lens at ball height
+   └┬┘
+```
 
-- **Ball speed:** least-squares fit of the ball centroid over the first ~8
-  post-impact frames → px/s → m/s via calibration → mph/km-h. This is the
-  most trustworthy number in the app (typically within ±2–3 mph of radar
-  when tracking is clean).
-- **Launch angle:** elevation of that fitted velocity vector. In a true side
-  view the image plane *is* the vertical plane, so this is direct.
-- **Clubhead speed:** clubhead (largest moving blob pre-impact) displacement
-  over the last frames before impact. Noisier than ball speed — the clubhead
-  is dark and motion-blurred.
-- **Smash factor:** ball speed ÷ club speed. Sanity range is ~1.45–1.52 for a
-  driver; if yours reads 1.9, the club tracking glitched, not your swing.
-- **Carry / apex / hang time:** numerical integration of the trajectory with
-  quadratic aerodynamic drag + Magnus lift. Lift uses *typical* backspin for
-  the selected club (e.g. ~2,600 rpm driver, ~6,800 rpm 7-iron) — an
-  assumption, not a measurement. Constants tuned so 157 mph/12° → ~235 yds
-  carry and 101 mph/20° → ~150 yds. Treat carry as a **±10–15% estimate**.
-- **Tempo:** frames from takeaway start (first sustained club motion) to top
-  of backswing (highest clubhead point) vs. top to impact, expressed as X:1
-  (PGA Tour average ≈ 3:1).
-- **Offline (L/R):** deviation of the tracked ball path from its fitted line,
-  extrapolated to the carry distance. A pure side view **cannot see true
-  azimuth** — this is a rough shape indicator, not a real left/right number.
-- **Spin:** displayed as **n/a**. A phone at 240 fps cannot resolve dimple
-  rotation. True spin needs a marked ball and 1000+ fps (or radar).
+- Face-on (camera looking at your chest) measures **ball speed, launch angle,
+  carry, apex, hang time and descent**, plus tempo. Down-the-line gives swing
+  analysis (tempo, phases) only.
+- Keep the ball in view with ~2 m of open space in front of it. A fast shutter
+  (Profile › Shutter, 1/2000 by default) freezes the ball; switch to Auto in
+  dim light.
+- Wait for the green brackets on the ball, then press record. Take your time:
+  practice swings are fine. Hit, then press stop (or let the recording limit
+  stop it).
 
-## Honest limitations vs. radar units (TrackMan / GCQuad)
+## How it works
 
-| | GolfMonitor (this app) | TrackMan / GCQuad |
+```
+camera (240 fps, 420f) ─┬─▶ HEVC recording (temp file)
+                        ├─▶ SceneMonitor @30 Hz ── motion energy + ball presence
+                        │       └─ GolfDetector (Core ML) locks stationary balls ~2×/s
+                        └─▶ WatchPreviewStreamer ── 4 fps JPEG ─▶ Apple Watch
+stop ─▶ ShotFinder: swings = motion bursts; shot = swing where a locked ball vanished
+     ─▶ ClipExporter: cut [impact − 2.4 s, impact + 1.4 s] (no re-encode)
+     ─▶ SwingAnalyzer: LaunchMeasurer (ball speed & launch) → FlightModel (carry…)
+                       + body pose (Vision) → swing phases & tempo
+     ─▶ ShotStore (clip, analysis.json, thumbnail) ─▶ Photos (optional) ─▶ reveal + watch
+```
+
+| Number | How | Trust |
 |---|---|---|
-| Ball speed | ±2–3 mph when tracking is clean | ±0.5 mph |
-| Launch angle | ±1–2° (side view) | ±0.2° |
-| Spin rate | not measured | ±50 rpm |
-| Carry | ±10–15% estimate (model) | ±1–2 yds (measured flight) |
-| Offline L/R | rough indicator only | ±1 yd |
-| Club path / face angle | not measured | measured |
+| Ball speed | Line fit (RANSAC) through the ball's positions in the frames after impact; pixels → metres from the ball's measured diameter (42.67 mm) | ● measured |
+| Launch angle | Elevation of the same fitted velocity (side view = vertical plane) | ● measured |
+| Carry, apex, hang time, descent | Drag + Magnus flight model with the club's *typical* spin | ◐ estimate, roughly ±10 % |
+| Club speed | Ball speed ÷ the club's typical smash factor | ◐ estimate |
+| Tempo | Takeaway → top → impact, from body pose and the measured impact frame | ● measured |
+| Spin, side angle | Not measurable from one side-on camera | — |
 
-Error sources: rolling shutter skew at 240 fps, motion blur on the ball and
-clubhead, pixel quantization (at 3 m a 720p frame gives ~1–2 mph per pixel of
-error), imperfect 90° camera alignment, and wind (the flight model assumes
-still air).
+More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Model training:
+[ml/README.md](ml/README.md).
 
-## Project layout
+## Tests
+
+77 unit and integration tests, including the full pipeline on 240 fps CC0
+fixtures (`GolfMonitorTests/Fixtures`, among them a synthetic session with a
+practice swing followed by the real strike).
 
 ```
-GolfMonitor.xcodeproj/      hand-authored Xcode project (iOS 17+, Swift 5)
-GolfMonitor/
-  GolfMonitorApp.swift      @main entry, TabView (Session / History / Setup)
-  Models.swift              Shot, Club, Calibration, SettingsStore, ShotStore, formatters
-  CameraManager.swift       AVFoundation session, 240 fps format picker, AVAssetWriter clips
-  TrackingEngine.swift      vImage blob tracking: ball (bright) + clubhead (motion)
-  MetricsCalculator.swift   speeds, angles, smash, tempo, drag+Magnus carry model
-  CalibrationView.swift     distance, side-view setup, ball-diameter auto-detect, units
-  SessionView.swift         single-shot and multi-shot session capture, analysis and results
-  ShotHistoryView.swift     per-club filter/averages, delete, CSV export via share sheet
-  Info.plist                camera usage description, orientations
-GolfMonitorWatchExtension/ Apple Watch Start/Stop remote for range sessions
+⌘U in Xcode, or:
+xcodebuild test -project GolfMonitor.xcodeproj -scheme GolfMonitor \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+scripts/run-tests.sh            # same tests, injected straight into the app
+                                # (for machines where xcodebuild's test runner can't connect)
 ```
 
-## Deliberate simplifications (v1)
+## Limitations
 
-- **Side view only.** Down-the-line view (for azimuth/path) is not implemented.
-- **Spin is n/a** by design; carry uses club-typical spin assumptions.
-- **Session recording (experimental):** choose Session for a continuous recording
-  of up to 5 minutes. Afterward, the app looks for motion events, extracts
-  candidate swing clips, analyzes them, and saves the full video to Photos.
-  Busy backgrounds and movement can cause missed or extra candidates; review
-  the resulting shots. Each detected clip is also saved in the local shot library.
-- **Apple Watch remote:** open the Range tab and detect the ball on the iPhone,
-  then use the GolfMonitor Watch app's Start/Stop button from your paired watch.
-  Keep the iPhone app open on Range and the phone/watch connected; start requires
-  a live camera and a locked ball. Install the Watch companion app from the
-  paired Watch app if it does not appear automatically. The Watch app remotely
-  starts a session of the selected duration (up to five minutes).
-- **Calibration uses the bundled golf-ball-specific YOLOv8n Core ML model only.**
-  It was fine-tuned for one epoch on the Roboflow GolfBall v1 dataset (CC BY 4.0;
-  [dataset](https://universe.roboflow.com/anna-gaming/golfball)). On the held-out
-  dataset test split it scored 0.696 mAP@0.5 and 0.342 mAP@0.5:0.95. This is an
-  initial CPU-training experiment, not a production-quality result; the model
-  may not generalize to your camera, range, or ball size. Failures are shown
-  instead of silently falling back to brightness detection.
-- **Shot tracking is still brightness/blob-based** across the recorded frames;
-  Core ML is not yet used to track the moving ball or calculate shot metrics.
-- **History is local JSON**, no cloud sync.
-- Left-handed golfers: ball direction is mirrored internally, so speeds and
-  angles are still correct; the tracer just draws right-to-left.
-
-## Ideas for v2
-
-- Continue golf-ball model training on a GPU and validate it on images captured
-  by the app at the intended 0.5–2 m range
-- Use the detector for ball tracking throughout the recorded clip
-- Down-the-line camera mode for club path, face angle, true offline
-- Audio-triggered capture (impact sound starts the 2 s buffer)
-- Marked-ball spin estimation with higher-frame-rate capture
+- One phone camera can't see spin or left/right direction, so carry uses
+  typical spin for the club and there is no offline number.
+- Ball tracking needs the ball in frame for at least 2–3 frames after impact
+  (240 fps, good light, fast shutter). If it fails, the shot is still saved
+  with swing analysis and the reason is shown.
+- The camera only runs while GolfMonitor is open on the iPhone. iOS doesn't let
+  a watch bring an app to the foreground. Keep the app open on the tripod
+  (the screen stays awake while the camera is live).
+- Bundled detector models derive from Ultralytics YOLO (AGPL-3.0), so the app
+  must stay open source.

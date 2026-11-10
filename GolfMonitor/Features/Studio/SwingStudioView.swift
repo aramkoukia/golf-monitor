@@ -82,7 +82,7 @@ struct SwingStudioView: View {
             }
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 metric("Ball speed", formatSpeed(mph: shot.ballSpeedMph, settings: settings))
-                metric("Carry", formatDistance(yards: shot.carryYards, settings: settings))
+                metric("Carry", shot.hasLaunchData ? formatDistance(yards: shot.carryYards, settings: settings) : "—")
                 metric("Club speed", formatSpeed(mph: shot.clubSpeedMph, settings: settings))
                 metric("Launch", shot.hasLaunchData ? String(format: "%.1f°", shot.launchAngleDeg) : "—")
                 metric("Tempo", formatTempo(shot.tempoRatio))

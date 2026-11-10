@@ -6,6 +6,7 @@ import Foundation
 /// -gm.demo            seed demo shots (synthetic history + bundled CC0 clips) if the library is empty
 /// -gm.reset           wipe the library before seeding
 /// -gm.skipOnboarding  mark onboarding complete
+/// -gm.autostart [s]   record for s seconds (default 4) once the camera is live, then analyze
 /// -gm.tab <tab>       start on a tab: range | library | insights | practice | profile
 /// -gm.studio first    open the newest shot that has media in the Swing Studio
 /// -gm.screen <name>   feature-specific deep link (each workstream documents its own)

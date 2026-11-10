@@ -28,8 +28,12 @@ enum DemoData {
             guard let src = Bundle.main.url(forResource: clip.name, withExtension: "mp4") else { continue }
             let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).mp4")
             try? FileManager.default.copyItem(at: src, to: tmp)
-            let request = AnalysisRequest(clipURL: tmp, club: clip.club, cameraView: clip.view,
-                                          handedness: handedness, calibration: nil)
+            // Find the strike like the live pipeline would (calibrating from the ball).
+            let strike = (try? await SceneScanner.scan(url: tmp)).flatMap { ShotFinder().firstStrike(in: $0) }
+            var request = AnalysisRequest(clipURL: tmp, club: clip.club, cameraView: clip.view, handedness: handedness,
+                                          calibration: clip.view == .faceOn ? strike.map { Calibration(ball: $0.ball) } : nil)
+            request.impactTimeHint = strike?.time
+            request.ballHint = strike?.ball.center
             guard let output = try? await SwingAnalyzer().analyze(request) else { continue }
             var shot = Shot.make(from: output, request: request, source: .demo)
             shot.notes = "Demo swing (CC0 footage)"

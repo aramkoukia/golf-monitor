@@ -1,9 +1,13 @@
 import SwiftUI
 
-/// Tab shell. (Owned by the Practice/Profile/Shell workstream.)
+/// Tab shell. The Range tab is the camera; the others are the library,
+/// charts, practice games and settings.
 struct RootView: View {
     @EnvironmentObject private var router: AppRouter
     @EnvironmentObject private var settings: SettingsStore
+    @EnvironmentObject private var services: AppServices
+    @EnvironmentObject private var camera: CameraController
+    @EnvironmentObject private var watchLink: WatchLinkStatus
 
     var body: some View {
         TabView(selection: $router.tab) {
@@ -17,10 +21,20 @@ struct RootView: View {
         .fullScreenCover(item: $router.studio) { route in
             SwingStudioView(route: route)
         }
-        .fullScreenCover(isPresented: Binding(get: { !settings.hasCompletedOnboarding },
-                                              set: { settings.hasCompletedOnboarding = !$0 })) {
-            OnboardingView()
+        // Each full-screen cover gets its own host view: two covers on the
+        // same view don't present reliably.
+        .background {
+            Color.clear
+                .fullScreenCover(isPresented: Binding(get: { !settings.hasCompletedOnboarding },
+                                                      set: { settings.hasCompletedOnboarding = !$0 })) {
+                    OnboardingView()
+                }
         }
+        .onChange(of: router.tab) { _, _ in services.tabChanged() }
+        .onChange(of: camera.status) { _, _ in services.cameraStatusChanged() }
+        .onChange(of: watchLink.isReachable) { _, _ in services.watchReachabilityChanged() }
+        .onChange(of: settings.shutterMode) { _, _ in services.applyShutter() }
+        .onChange(of: settings.hapticsEnabled) { _, on in Haptics.enabled = on }
     }
 
     @ViewBuilder

@@ -69,6 +69,12 @@ final class SettingsStore: ObservableObject {
     /// Clip length for timer-triggered capture (seconds).
     @Published var clipSeconds: Int { didSet { set(clipSeconds, "clipSeconds") } }
     @Published var playerName: String { didSet { set(playerName, "playerName") } }
+    /// Save each analyzed shot clip to the Photos library.
+    @Published var saveShotsToPhotos: Bool { didSet { set(saveShotsToPhotos, "saveShotsToPhotos") } }
+    /// Also save the whole recording (setup, practice swings, shot) to Photos.
+    @Published var saveSessionToPhotos: Bool { didSet { set(saveSessionToPhotos, "saveSessionToPhotos") } }
+    /// Longest continuous recording, in minutes (auto-stops after this).
+    @Published var maxRecordingMinutes: Int { didSet { set(maxRecordingMinutes, "maxRecordingMinutes") } }
     @Published var hasCompletedOnboarding: Bool { didSet { set(hasCompletedOnboarding, "hasCompletedOnboarding") } }
 
     init(defaults: UserDefaults = .standard) {
@@ -91,12 +97,19 @@ final class SettingsStore: ObservableObject {
         countdownSeconds = int("countdownSeconds", 5)
         clipSeconds = int("clipSeconds", 3)
         playerName = string("playerName") ?? ""
+        saveShotsToPhotos = bool("saveShotsToPhotos", false)
+        saveSessionToPhotos = bool("saveSessionToPhotos", false)
+        maxRecordingMinutes = min(max(int("maxRecordingMinutes", 3), 1), 10)
         hasCompletedOnboarding = bool("hasCompletedOnboarding", false)
     }
 
     private func set(_ value: Any, _ key: String) {
         defaults.set(value, forKey: "golfmonitor." + key)
     }
+
+    static let recordingLimitOptions = [1, 2, 3, 5, 10]
+
+    var maxRecordingSeconds: TimeInterval { TimeInterval(maxRecordingMinutes * 60) }
 
     // MARK: Unit conversion (canonical: mph, yards)
 

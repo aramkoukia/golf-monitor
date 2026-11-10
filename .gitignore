@@ -1,12 +1,11 @@
-GolfMonitor.xcodeproj/project.xcworkspace/xcuserdata/Aram.xcuserdatad/UserInterfaceState.xcuserstate
+# Xcode
+xcuserdata/
 *.xcuserstate
-GolfMonitor.xcodeproj/xcuserdata/
-runs/
-
-# Build output
 build/
 DerivedData/
 *.xcresult
+runs/
+.DS_Store
 
 # ML training artifacts (kept outside the repo)
 ml/datasets/

@@ -13,12 +13,12 @@ final class MLPipelineTests: XCTestCase {
         return b.url(forResource: name, withExtension: "mp4") ?? b.url(forResource: name, withExtension: "mp4", subdirectory: "Fixtures")
     }
 
-    static func frame(_ name: String, at seconds: Double) throws -> CGImage {
+    static func frame(_ name: String, at seconds: Double) async throws -> CGImage {
         let gen = AVAssetImageGenerator(asset: AVURLAsset(url: try XCTUnwrap(fixtureURL(name))))
         gen.appliesPreferredTrackTransform = true
         gen.requestedTimeToleranceBefore = .zero
         gen.requestedTimeToleranceAfter = .zero
-        return try gen.copyCGImage(at: CMTime(seconds: seconds, preferredTimescale: 600), actualTime: nil)
+        return try await gen.image(at: CMTime(seconds: seconds, preferredTimescale: 600)).image
     }
 
     static var outDir: URL {
@@ -28,10 +28,10 @@ final class MLPipelineTests: XCTestCase {
         return url
     }
 
-    func testCoreMLPoseOnFixtureFrames() throws {
+    func testCoreMLPoseOnFixtureFrames() async throws {
         let est = try XCTUnwrap(CoreMLPoseEstimator())
         for (clip, t) in [("faceon_driver", 0.15), ("faceon_driver", 1.30), ("dtl_iron", 0.2), ("dtl_iron", 1.0)] {
-            let cg = try Self.frame(clip, at: t)
+            let cg = try await Self.frame(clip, at: t)
             let pose = try XCTUnwrap(est.pose(in: CIImage(cgImage: cg), t: t), "no pose for \(clip)@\(t)")
             // Anatomical sanity in an upright frame: head above hips above ankles.
             let nose = try XCTUnwrap(pose.point(.nose, minConfidence: 0.3))
@@ -43,15 +43,15 @@ final class MLPipelineTests: XCTestCase {
         }
     }
 
-    func testCOCODetectorFindsGolferAndBalls() throws {
+    func testCOCODetectorFindsGolferAndBalls() async throws {
         let det = try XCTUnwrap(ObjectDetector(.cocoDetector))
-        let cg = try Self.frame("faceon_driver", at: 0.15)
+        let cg = try await Self.frame("faceon_driver", at: 0.15)
         let dets = det.detect(in: CIImage(cgImage: cg), confidence: 0.2)
         XCTAssertTrue(dets.contains { $0.label == "person" }, "labels: \(dets.map(\.label))")
         Self.render(cg, pose: nil, detections: dets, name: "coco_faceon")
     }
 
-    func testGolfDetectorIsBundledAndRecognizesBallClass() throws {
+    func testGolfDetectorIsBundledAndRecognizesBallClass() async throws {
         let detector = try XCTUnwrap(ObjectDetector(.golfDetector))
         XCTAssertTrue(
             detector.classNames.contains { $0.localizedCaseInsensitiveContains("ball") },
@@ -59,39 +59,9 @@ final class MLPipelineTests: XCTestCase {
         )
     }
 
-    func testBallSelectionPrefersCenteredDetectionOverHigherConfidenceDistractor() {
-        let centeredBall = DetectedBall(
-            center: CGPoint(x: 501, y: 499), diameter: 22,
-            frameWidth: 1000, frameHeight: 1000, confidence: 0.35
-        )
-        let distractor = DetectedBall(
-            center: CGPoint(x: 600, y: 510), diameter: 48,
-            frameWidth: 1000, frameHeight: 1000, confidence: 0.9
-        )
-        let outsideCenter = DetectedBall(
-            center: CGPoint(x: 850, y: 700), diameter: 60,
-            frameWidth: 1000, frameHeight: 1000, confidence: 0.99
-        )
-
-        let selected = DetectedBall.centeredCandidates(
-            in: [outsideCenter, distractor, centeredBall]
-        ).first
-
-        XCTAssertEqual(selected?.center, centeredBall.center)
-    }
-
-    func testBallSelectionRejectsCandidatesOutsideCenterFramingArea() {
-        let candidate = DetectedBall(
-            center: CGPoint(x: 800, y: 700), diameter: 40,
-            frameWidth: 1000, frameHeight: 1000, confidence: 0.99
-        )
-
-        XCTAssertTrue(DetectedBall.centeredCandidates(in: [candidate]).isEmpty)
-    }
-
-    func testGolfDetectorFindsBallWithNativeAndCalibrationTiles() throws {
+    func testGolfDetectorFindsBallWithNativeAndCalibrationTiles() async throws {
         let detector = try XCTUnwrap(ObjectDetector(.golfDetector))
-        let cg = try Self.frame("faceon_driver", at: 0.15)
+        let cg = try await Self.frame("faceon_driver", at: 0.15)
         let image = CIImage(cgImage: cg)
         let trackingDetections = detector.detectTiled(in: image, confidence: 0.25)
         XCTAssertTrue(

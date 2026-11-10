@@ -12,17 +12,12 @@ struct AnalysisRequest {
     var handedness: Handedness
     /// Ball-diameter calibration. nil → swing-only analysis (no launch numbers).
     var calibration: Calibration?
-    /// Seconds from clip start where impact was heard/seen, if known.
-    var impactTimeHint: Double? = nil
-    /// Phone roll (degrees, + = clockwise) from CoreMotion at capture, used to
-    /// correct "vertical" for tilt metrics and launch angle.
-    var deviceRollDeg: Double? = nil
-    /// Focal length in pixels of the capture format (intrinsics), if known.
-    var focalLengthPx: Double? = nil
-    /// Exposure duration used for capture (seconds), for blur-aware tracking.
-    var exposureDurationS: Double? = nil
     /// Actual capture rate. Nil keeps the analyzer's 240 fps default.
     var captureFPS: Double? = nil
+    /// Seconds from clip start where the ball left (from the scene monitor).
+    var impactTimeHint: Double? = nil
+    /// Where the ball sat at address, in upright frame pixels.
+    var ballHint: CGPoint? = nil
 }
 
 struct AnalysisOutput {
@@ -31,152 +26,134 @@ struct AnalysisOutput {
     /// Why launch numbers are missing, user-presentable.
     var metricsError: String?
     var analysis: SwingAnalysis
+    /// 0–1 confidence in the ball track behind the launch numbers.
+    var trackingQuality: Double?
     /// Poster frame (address position) for lists.
     var thumbnail: UIImage?
-    /// Impact-ish frame with the ball/club trails drawn, for sharing.
+    /// Impact frame with the measured ball path drawn on it.
     var tracerImage: UIImage?
 }
 
-/// Offline analysis of one recorded swing clip: ball + club tracking, body
-/// pose, swing phases, pose metrics vs tour ranges, coaching insights and
-/// launch metrics. Runs off the main thread.
-///
-/// NOTE: this initial implementation wraps the v1 blob tracker; the analysis
-/// workstream replaces the internals while keeping this interface.
+/// Offline, on-device analysis of one shot clip:
+///  • ball launch (speed, angle) from the frames after impact → flight model
+///    for carry / apex / hang time / descent (`LaunchMeasurer`, `FlightModel`)
+///  • body pose (Apple Vision on device; YOLO11n-pose Core ML in the Simulator)
+///  • swing phases and tempo anchored on the impact time (`SwingPhaseDetector`)
 final class SwingAnalyzer {
     init() {}
 
     func analyze(_ request: AnalysisRequest,
                  progress: @escaping (Double, String) -> Void = { _, _ in }) async throws -> AnalysisOutput {
         try await Task.detached(priority: .userInitiated) {
-            progress(0.1, "Tracking ball")
-            let fps = request.captureFPS.flatMap { $0.isFinite && $0 > 0 ? $0 : nil } ?? 240.0
-            // TrackingEngine downsamples frames to half resolution before
-            // measuring points, so keep ball size and metric scale in that
-            // same coordinate space.
-            let trackingPixelsPerMeter = request.calibration.map { $0.pixelsPerMeter / 2 }
-            let trackingBallDiameter = request.calibration?.ballDiameterPx.map { $0 / 2 }
-            let tracking = TrackingEngine().track(videoURL: request.clipURL, fps: fps,
-                                                  expectedBallDiameterPx: trackingBallDiameter)
+            let asset = AVURLAsset(url: request.clipURL)
+            guard let track = try await asset.loadTracks(withMediaType: .video).first else {
+                throw LaunchError.unreadableClip
+            }
+            let size = try await track.load(.naturalSize)
+            let duration = try await asset.load(.duration).seconds
+            let fps = request.captureFPS.flatMap { $0.isFinite && $0 > 0 ? $0 : nil } ?? 240
+            var analysis = SwingAnalysis(fps: fps, frameWidth: Int(size.width), frameHeight: Int(size.height),
+                                         duration: duration, cameraView: request.cameraView,
+                                         handedness: request.handedness,
+                                         pixelsPerMeter: request.calibration?.pixelsPerMeter)
+
+            // 1. Ball launch.
+            progress(0.05, "Measuring ball flight")
             var metrics: ShotMetrics?
             var failure: String?
-            if request.calibration != nil, request.cameraView == .faceOn {
+            var quality: Double?
+            if let ball = request.ballHint {
+                analysis.ballAddress = TrackPoint(t: 0, x: Double(ball.x) / max(1, Double(analysis.frameWidth)),
+                                                  y: Double(ball.y) / max(1, Double(analysis.frameHeight)))
+            }
+            if request.cameraView == .downTheLine {
+                failure = "Down-the-line view analyzes the swing; switch to face-on for ball speed and carry."
+            } else if let calibration = request.calibration, calibration.isCalibrated,
+                      let diameter = calibration.ballDiameterPx, let ball = request.ballHint,
+                      let impact = request.impactTimeHint {
                 do {
-                    metrics = try MetricsCalculator.calculate(tracking: tracking,
-                                                              pixelsPerMeter: trackingPixelsPerMeter ?? 0,
-                                                              club: request.club)
+                    let launch = try await LaunchMeasurer.measure(videoURL: request.clipURL, impactTimeHint: impact,
+                                                                  ballCenter: ball, ballDiameterPx: diameter,
+                                                                  pixelsPerMeter: calibration.pixelsPerMeter)
+                    let (m, flight) = FlightModel.metrics(ballSpeedMps: launch.speedMps,
+                                                          launchAngleDeg: launch.launchAngleDeg, club: request.club)
+                    metrics = m
+                    quality = launch.quality
+                    analysis.impactTime = launch.impactTime
+                    analysis.ballTrack = launch.points
+                    analysis.flight = flight.samples
                 } catch {
                     failure = error.localizedDescription
+                    analysis.impactTime = impact
                 }
             } else {
-                failure = "Launch numbers need a face-on camera and a calibrated ball."
+                failure = "No ball strike was found, so this is a swing-only analysis."
+                analysis.impactTime = request.impactTimeHint
             }
-            progress(0.9, "Rendering")
-            let w = Double(max(tracking.frameWidth, 1)), h = Double(max(tracking.frameHeight, 1))
-            var analysis = SwingAnalysis(fps: fps, frameWidth: tracking.frameWidth * 2, frameHeight: tracking.frameHeight * 2,
-                                         duration: tracking.ballPoints.last?.time ?? 0,
-                                         cameraView: request.cameraView, handedness: request.handedness,
-                                         pixelsPerMeter: request.calibration?.pixelsPerMeter)
-            analysis.ballTrack = tracking.ballPoints.map { TrackPoint(t: $0.time, x: $0.x / w, y: $0.y / h) }
-            analysis.clubTrack = tracking.clubPoints.map { TrackPoint(t: $0.time, x: $0.x / w, y: $0.y / h) }
-            if let i = tracking.impactBallIndex, i < tracking.ballPoints.count { analysis.impactTime = tracking.ballPoints[i].time }
-            progress(0.6, "Reading body pose")
-            let (poses, size, duration) = try await Self.interimPoses(videoURL: request.clipURL)
-            analysis.poses = poses
-            if size.width > 0 {
-                analysis.frameWidth = Int(size.width)
-                analysis.frameHeight = Int(size.height)
-                analysis.duration = duration
+
+            // 2. Body pose and swing phases.
+            progress(0.4, "Reading your swing")
+            let estimator = PoseEstimatorFactory.make()
+            if let estimator {
+                let window: ClosedRange<Double> = analysis.impactTime.map { max(0, $0 - 2.0)...min(duration, $0 + 1.0) }
+                    ?? 0...duration
+                analysis.poses = try await Self.poses(in: asset, track: track, window: window, estimator: estimator) { p in
+                    progress(0.4 + 0.5 * p, "Reading your swing")
+                }
             }
-            analysis.phases = Self.interimPhases(poses, lead: request.handedness == .right ? .leftWrist : .rightWrist)
-            if let top = analysis.marker(.top)?.t, let address = analysis.marker(.address)?.t,
-               let impact = analysis.marker(.impact)?.t, top > address, impact > top {
-                let back = top - address, down = impact - top
-                analysis.metrics = [
-                    SwingMetric(id: "tempo.ratio", name: "Tempo", value: back / down, unit: ":1",
-                                tourRange: 2.7...3.3, rating: (2.7...3.3).contains(back / down) ? .tour : .good,
-                                explanation: "Backswing time divided by downswing time."),
-                    SwingMetric(id: "tempo.backswing", name: "Backswing", value: back, unit: "s", phase: .top),
-                    SwingMetric(id: "tempo.downswing", name: "Downswing", value: down, unit: "s", phase: .impact),
-                ]
+            analysis.phases = SwingPhaseDetector.phases(from: analysis.poses, handedness: request.handedness,
+                                                        impactTime: analysis.impactTime)
+            if analysis.impactTime == nil { analysis.impactTime = analysis.marker(.impact)?.t }
+            analysis.metrics = SwingPhaseDetector.tempoMetrics(from: analysis.phases)
+            if var m = metrics {
+                m.tempoRatio = analysis.metric("tempo.ratio")?.value ?? 0
+                metrics = m
             }
-            let ballTracker = tracking.golfDetectorAssisted
-                ? "GolfDetector-assisted v1 blob tracker"
-                : "v1 blob tracker"
-            analysis.pipeline = "\(ballTracker) + \(PoseEstimatorFactory.make()?.name ?? "no pose")"
-            let tracer = await TracerRenderer.makeTracerImage(videoURL: request.clipURL, tracking: tracking)
-            let poster = await Self.posterFrame(
-                videoURL: request.clipURL,
-                at: analysis.marker(.address)?.t ?? 0
-            ) ?? tracer
+            analysis.pipeline = [metrics != nil ? "GolfDetector + launch fit" : nil, estimator?.name]
+                .compactMap { $0 }.joined(separator: " · ")
+
+            // 3. Images.
+            progress(0.93, "Rendering")
+            let tracer = await TracerRenderer.render(videoURL: request.clipURL, analysis: analysis)
+            let posterTime = analysis.marker(.address)?.t ?? max(0, (analysis.impactTime ?? 0.5) - 1.2)
+            let poster = await Self.posterFrame(asset: asset, at: posterTime) ?? tracer
             progress(1, "Done")
-            return AnalysisOutput(metrics: metrics, metricsError: failure, analysis: analysis,
+            return AnalysisOutput(metrics: metrics, metricsError: metrics == nil ? failure : nil,
+                                  analysis: analysis, trackingQuality: quality,
                                   thumbnail: poster, tracerImage: tracer)
         }.value
     }
 
-    // MARK: Interim helpers (replaced by the analysis workstream)
-
-    /// Pose every 8th frame (≈30 fps at 240 fps capture).
-    private static func interimPoses(videoURL: URL) async throws -> ([PoseSample], CGSize, Double) {
-        guard let estimator = PoseEstimatorFactory.make() else { return ([], .zero, 0) }
-        let asset = AVURLAsset(url: videoURL)
-        let gen = AVAssetImageGenerator(asset: asset)
-        gen.appliesPreferredTrackTransform = true
-        gen.requestedTimeToleranceBefore = .zero
-        gen.requestedTimeToleranceAfter = .zero
-        let duration = try await asset.load(.duration).seconds
-        guard duration.isFinite, duration > 0 else { return ([], .zero, 0) }
+    /// Poses at ~30 Hz across `window`, decoded sequentially (much faster
+    /// than seeking frame by frame).
+    private static func poses(in asset: AVURLAsset, track: AVAssetTrack, window: ClosedRange<Double>,
+                              estimator: PoseEstimating, progress: (Double) -> Void) async throws -> [PoseSample] {
+        let reader = try AVAssetReader(asset: asset)
+        reader.timeRange = CMTimeRange(start: CMTime(seconds: window.lowerBound, preferredTimescale: 6000),
+                                       end: CMTime(seconds: window.upperBound, preferredTimescale: 6000))
+        let output = AVAssetReaderTrackOutput(track: track, outputSettings: [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+        ])
+        output.alwaysCopiesSampleData = false
+        guard reader.canAdd(output) else { return [] }
+        reader.add(output)
+        guard reader.startReading() else { return [] }
         var poses: [PoseSample] = []
-        var size = CGSize.zero
-        var t = 0.0
-        while t < duration {
-            if let cg = await gen.frameImage(at: CMTime(seconds: t, preferredTimescale: 600)) {
-                size = CGSize(width: cg.width, height: cg.height)
-                if let p = estimator.pose(in: CIImage(cgImage: cg), t: t) { poses.append(p) }
-            }
-            t += 8.0 / 240.0
+        var next = -Double.infinity
+        let span = max(window.upperBound - window.lowerBound, 0.01)
+        while let sample = output.copyNextSampleBuffer() {
+            try Task.checkCancellation()
+            let t = CMSampleBufferGetPresentationTimeStamp(sample).seconds
+            guard t.isFinite, t >= next - 0.001, let buffer = CMSampleBufferGetImageBuffer(sample) else { continue }
+            next = t + 1.0 / 30
+            if let pose = estimator.pose(in: CIImage(cvPixelBuffer: buffer), t: t) { poses.append(pose) }
+            progress(min(1, (t - window.lowerBound) / span))
         }
-        return (poses, size, duration)
+        return poses
     }
 
-    /// Naive phases from the lead wrist: top = highest wrist, impact = lowest
-    /// wrist after top, address = first sample, finish = last sample.
-    private static func interimPhases(_ poses: [PoseSample], lead: BodyJoint) -> [SwingPhaseMarker] {
-        let pts = poses.compactMap { p in p.point(lead).map { (p.t, $0) } }
-        guard pts.count >= 6 else { return [] }
-        // The lead wrist goes low (address) → high (top) → low (impact) →
-        // high (finish). Impact = first return to address height after the
-        // hands have risen; top = highest point before that.
-        let addressY = pts.prefix(5).map(\.1.y).sorted()[min(2, pts.prefix(5).count - 1)]
-        var minIndex = 0
-        var topIndex: Int?
-        for (i, p) in pts.enumerated() {
-            if p.1.y < pts[minIndex].1.y { minIndex = i }
-            let rise = addressY - pts[minIndex].1.y
-            if rise > 0.08, p.1.y > pts[minIndex].1.y + 0.5 * rise { topIndex = minIndex; break }
-        }
-        guard let ti = topIndex else { return [] }
-        let top = pts[ti]
-        let window = pts[(ti + 1)...].prefix { $0.0 - top.0 <= 0.5 }
-        guard let impact = window.max(by: { $0.1.y < $1.1.y }) else { return [] }
-        let address = pts.first!.0
-        let finish = pts.last!.0
-        func mid(_ a: Double, _ b: Double) -> Double { a + (b - a) / 2 }
-        return [
-            SwingPhaseMarker(phase: .address, t: address, confidence: 0.3),
-            SwingPhaseMarker(phase: .toeUp, t: address + (top.0 - address) * 0.35, confidence: 0.2),
-            SwingPhaseMarker(phase: .midBackswing, t: address + (top.0 - address) * 0.65, confidence: 0.2),
-            SwingPhaseMarker(phase: .top, t: top.0, confidence: 0.5),
-            SwingPhaseMarker(phase: .midDownswing, t: mid(top.0, impact.0), confidence: 0.3),
-            SwingPhaseMarker(phase: .impact, t: impact.0, confidence: 0.5),
-            SwingPhaseMarker(phase: .midFollowThrough, t: mid(impact.0, finish), confidence: 0.2),
-            SwingPhaseMarker(phase: .finish, t: finish, confidence: 0.3),
-        ]
-    }
-
-    private static func posterFrame(videoURL: URL, at t: Double) async -> UIImage? {
-        let gen = AVAssetImageGenerator(asset: AVURLAsset(url: videoURL))
+    private static func posterFrame(asset: AVURLAsset, at t: Double) async -> UIImage? {
+        let gen = AVAssetImageGenerator(asset: asset)
         gen.appliesPreferredTrackTransform = true
         gen.maximumSize = CGSize(width: 720, height: 720)
         guard let cg = await gen.frameImage(at: CMTime(seconds: t, preferredTimescale: 600)) else { return nil }
@@ -187,13 +164,6 @@ final class SwingAnalyzer {
 extension AVAssetImageGenerator {
     func frameImage(at time: CMTime) async -> CGImage? {
         try? await image(at: time).image
-    }
-}
-
-/// Finds the ball in a single preview frame for calibration ("Detect ball").
-enum BallLocator {
-    static func locate(in sampleBuffer: CMSampleBuffer) -> BallDetectionOutcome {
-        TrackingEngine.detectBall(in: sampleBuffer)
     }
 }
 
@@ -221,6 +191,8 @@ extension Shot {
             cameraView: request.cameraView,
             source: source
         )
+        shot.descentAngleDeg = m?.descentAngleDeg
+        shot.trackingQuality = output.trackingQuality
         shot.backswingTimeS = a.metric("tempo.backswing")?.value
         shot.downswingTimeS = a.metric("tempo.downswing")?.value
         shot.metricSummary = Dictionary(a.metrics.map { ($0.id, $0.value) }, uniquingKeysWith: { first, _ in first })

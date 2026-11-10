@@ -119,11 +119,11 @@ final class ObjectDetector {
         let anchors = channelsFirst ? shape[2] : shape[1]
         let numClasses = channels - 4
         guard numClasses > 0 else { return [] }
-        let ptr = out.dataPointer.bindMemory(to: Float.self, capacity: out.count)
-        let isFloat32 = out.dataType == .float32
+        let read = MultiArrayReader(out)
+        // Core ML may hand back a padded / transposed layout: always index
+        // through the array's strides, never assume contiguous memory.
         func v(_ ch: Int, _ a: Int) -> Float {
-            let idx = channelsFirst ? ch * anchors + a : a * channels + ch
-            return isFloat32 ? ptr[idx] : out[idx].floatValue
+            channelsFirst ? read[0, ch, a] : read[0, a, ch]
         }
         var dets: [Detection] = []
         for a in 0..<anchors {
@@ -170,5 +170,28 @@ final class ObjectDetector {
             names[i] = ns.substring(with: m.range(at: 2))
         }
         return (0..<(names.keys.max().map { $0 + 1 } ?? 0)).map { names[$0] ?? "class\($0)" }
+    }
+}
+
+/// Stride-aware element access for 3-D `MLMultiArray`s (fp32 / fp16 / fp64).
+struct MultiArrayReader {
+    private let array: MLMultiArray
+    private let strides: [Int]
+    private let base: UnsafeMutableRawPointer
+
+    init(_ array: MLMultiArray) {
+        self.array = array
+        strides = array.strides.map(\.intValue)
+        base = array.dataPointer
+    }
+
+    subscript(_ i: Int, _ j: Int, _ k: Int) -> Float {
+        let offset = i * strides[0] + j * strides[1] + k * strides[2]
+        switch array.dataType {
+        case .float32: return base.assumingMemoryBound(to: Float.self)[offset]
+        case .float16: return Float(base.assumingMemoryBound(to: Float16.self)[offset])
+        case .double: return Float(base.assumingMemoryBound(to: Double.self)[offset])
+        default: return array[[i, j, k] as [NSNumber]].floatValue
+        }
     }
 }

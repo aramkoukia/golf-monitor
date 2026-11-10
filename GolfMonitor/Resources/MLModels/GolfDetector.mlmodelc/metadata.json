@@ -1,0 +1,90 @@
+[
+  {
+    "shortDescription" : "Ultralytics best model trained on \/tmp\/golfball-dataset.yaml",
+    "metadataOutputVersion" : "3.0",
+    "outputSchema" : [
+      {
+        "hasShapeFlexibility" : "0",
+        "isOptional" : "0",
+        "dataType" : "Float32",
+        "formattedType" : "MultiArray (Float32 1 × 5 × 3549)",
+        "shortDescription" : "",
+        "shape" : "[1, 5, 3549]",
+        "name" : "var_910",
+        "type" : "MultiArray"
+      }
+    ],
+    "version" : "8.4.188",
+    "modelParameters" : [
+
+    ],
+    "author" : "Ultralytics",
+    "specificationVersion" : 6,
+    "storagePrecision" : "Float32",
+    "license" : "AGPL-3.0 License (https:\/\/ultralytics.com\/license)",
+    "mlProgramOperationTypeHistogram" : {
+      "Concat" : 17,
+      "Silu" : 57,
+      "Sub" : 2,
+      "Transpose" : 1,
+      "UpsampleNearestNeighbor" : 2,
+      "Softmax" : 1,
+      "Mul" : 3,
+      "Reshape" : 8,
+      "MaxPool" : 3,
+      "Add" : 8,
+      "Sigmoid" : 1,
+      "Split" : 9,
+      "Conv" : 64
+    },
+    "computePrecision" : "Mixed (Float32, Int32)",
+    "stateSchema" : [
+
+    ],
+    "isUpdatable" : "0",
+    "availability" : {
+      "macOS" : "12.0",
+      "tvOS" : "15.0",
+      "visionOS" : "1.0",
+      "watchOS" : "8.0",
+      "iOS" : "15.0",
+      "macCatalyst" : "15.0"
+    },
+    "modelType" : {
+      "name" : "MLModelType_mlProgram"
+    },
+    "inputSchema" : [
+      {
+        "height" : "416",
+        "colorspace" : "RGB",
+        "isOptional" : "0",
+        "width" : "416",
+        "isColor" : "1",
+        "formattedType" : "Image (Color 416 × 416)",
+        "hasSizeFlexibility" : "0",
+        "type" : "Image",
+        "shortDescription" : "",
+        "name" : "image"
+      }
+    ],
+    "userDefinedMetadata" : {
+      "batch" : "1",
+      "head" : "Detect",
+      "com.github.apple.coremltools.version" : "9.0",
+      "names" : "{0: 'golfball'}",
+      "imgsz" : "[416, 416]",
+      "docs" : "https:\/\/docs.ultralytics.com",
+      "com.github.apple.coremltools.conversion_date" : "2026-10-24",
+      "channels" : "3",
+      "stride" : "32",
+      "date" : "2026-10-24T17:25:14.998732-07:00",
+      "args" : "{'batch': 1, 'quantize': None, 'nms': False, 'dynamic': False}",
+      "com.github.apple.coremltools.source_dialect" : "TorchScript",
+      "com.github.apple.coremltools.source" : "torch==2.2.2",
+      "task" : "detect",
+      "end2end" : "False"
+    },
+    "generatedClassName" : "GolfBallDetector",
+    "method" : "predict"
+  }
+]

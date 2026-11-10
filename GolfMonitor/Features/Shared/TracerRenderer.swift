@@ -1,72 +1,53 @@
 import AVFoundation
 import UIKit
 
-// MARK: - Shot tracer renderer
-
-/// Extracts a frame from the clip and draws the tracked ball trajectory over it.
+/// Renders a still for sharing and lists: the frame just after impact with
+/// the measured ball path drawn as a glowing Plasma tracer.
 enum TracerRenderer {
-
-    static func makeTracerImage(videoURL: URL, tracking: TrackingResult) async -> UIImage? {
-        guard !tracking.ballPoints.isEmpty else { return nil }
-        // Show a frame a bit after impact so the ball trail is visible.
-        let impactTime = tracking.impactBallIndex
-            .flatMap { tracking.ballPoints.indices.contains($0) ? tracking.ballPoints[$0].time : nil } ?? 0
-        let frameTime = min(impactTime + 0.12, tracking.ballPoints.last?.time ?? 0.5)
-        guard let base = await frameImage(videoURL: videoURL, at: frameTime),
-              let cg = base.cgImage
-        else { return nil }
-
-        let imgW = CGFloat(cg.width), imgH = CGFloat(cg.height)
-        let sx = imgW / CGFloat(max(tracking.frameWidth, 1))
-        let sy = imgH / CGFloat(max(tracking.frameHeight, 1))
+    static func render(videoURL: URL, analysis: SwingAnalysis) async -> UIImage? {
+        let impact = analysis.impactTime ?? analysis.marker(.impact)?.t
+        let frameTime = impact.map { $0 + 0.05 } ?? analysis.duration / 2
+        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: videoURL))
+        generator.appliesPreferredTrackTransform = true
+        generator.requestedTimeToleranceBefore = .zero
+        generator.requestedTimeToleranceAfter = CMTime(value: 1, timescale: 120)
+        guard let cg = await generator.frameImage(at: CMTime(seconds: frameTime, preferredTimescale: 6000)) else { return nil }
+        let size = CGSize(width: cg.width, height: cg.height)
+        let points = analysis.ballTrack.map { CGPoint(x: $0.x * size.width, y: $0.y * size.height) }
 
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: imgW, height: imgH), format: format)
-        return renderer.image { _ in
-            base.draw(in: CGRect(x: 0, y: 0, width: imgW, height: imgH))
-            guard let ctx = UIGraphicsGetCurrentContext() else { return }
-
-            // Ball trail (yellow).
-            ctx.setStrokeColor(UIColor.systemYellow.cgColor)
-            ctx.setLineWidth(max(3, imgW / 320))
-            ctx.setLineCap(.round)
-            ctx.beginPath()
-            for (i, p) in tracking.ballPoints.enumerated() {
-                let q = CGPoint(x: CGFloat(p.x) * sx, y: CGFloat(p.y) * sy)
-                if i == 0 { ctx.move(to: q) } else { ctx.addLine(to: q) }
+        return UIGraphicsImageRenderer(size: size, format: format).image { context in
+            UIImage(cgImage: cg).draw(in: CGRect(origin: .zero, size: size))
+            guard points.count >= 2 else { return }
+            let c = context.cgContext
+            let path = CGMutablePath()
+            path.addLines(between: points)
+            // Extend the fitted line a little beyond the last tracked point.
+            if let a = points.first, let b = points.last {
+                path.addLine(to: CGPoint(x: b.x + (b.x - a.x) * 0.6, y: b.y + (b.y - a.y) * 0.6))
             }
-            ctx.strokePath()
-
-            // Impact marker (red dot).
-            if let idx = tracking.impactBallIndex,
-               tracking.ballPoints.indices.contains(idx) {
-                let p = tracking.ballPoints[idx]
-                let q = CGPoint(x: CGFloat(p.x) * sx, y: CGFloat(p.y) * sy)
-                ctx.setFillColor(UIColor.systemRed.cgColor)
-                let r = max(6, imgW / 160)
-                ctx.fillEllipse(in: CGRect(x: q.x - r, y: q.y - r, width: r * 2, height: r * 2))
-            }
-
-            // Club trail pre-impact (cyan, thin).
-            if tracking.clubPoints.count >= 2 {
-                ctx.setStrokeColor(UIColor.systemCyan.cgColor)
-                ctx.setLineWidth(max(2, imgW / 480))
-                ctx.beginPath()
-                for (i, p) in tracking.clubPoints.enumerated() {
-                    let q = CGPoint(x: CGFloat(p.x) * sx, y: CGFloat(p.y) * sy)
-                    if i == 0 { ctx.move(to: q) } else { ctx.addLine(to: q) }
-                }
-                ctx.strokePath()
+            let width = max(4, size.width / 150)
+            c.setLineCap(.round)
+            c.setLineJoin(.round)
+            c.setBlendMode(.plusLighter)
+            c.setShadow(offset: .zero, blur: width * 3, color: UIColor(red: 1, green: 0.35, blue: 0.12, alpha: 1).cgColor)
+            c.setStrokeColor(UIColor(red: 1, green: 0.35, blue: 0.12, alpha: 1).cgColor)
+            c.setLineWidth(width)
+            c.addPath(path)
+            c.strokePath()
+            c.setShadow(offset: .zero, blur: 0)
+            c.setStrokeColor(UIColor(red: 1, green: 0.91, blue: 0.69, alpha: 1).cgColor)
+            c.setLineWidth(width * 0.35)
+            c.addPath(path)
+            c.strokePath()
+            c.setBlendMode(.normal)
+            if let address = points.first {
+                let r = width * 2.2
+                c.setStrokeColor(UIColor(red: 0.24, green: 0.96, blue: 0.65, alpha: 0.9).cgColor)
+                c.setLineWidth(width * 0.4)
+                c.strokeEllipse(in: CGRect(x: address.x - r, y: address.y - r, width: r * 2, height: r * 2))
             }
         }
-    }
-
-    private static func frameImage(videoURL: URL, at seconds: Double) async -> UIImage? {
-        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: videoURL))
-        generator.appliesPreferredTrackTransform = true
-        let time = CMTime(seconds: seconds, preferredTimescale: 600)
-        guard let cg = await generator.frameImage(at: time) else { return nil }
-        return UIImage(cgImage: cg)
     }
 }
