@@ -237,8 +237,6 @@ the Range screen, watch, or video import is remembered.
 - 2D torso lean, knee bend, head movement and hip sway estimates when enough
   body landmarks are visible. These are image-plane observations, not 3D
   measurements or coaching diagnoses.
-- Optional moving body-pose skeleton over the video, plus 2D torso lean, knee
-  bend, head movement and hip sway estimates when enough landmarks are visible.
 - Metrics grid.
 - Eight phase chips (Address, Takeaway, Halfway Back, Top, Delivery, Impact,
   Release, Finish). Tap one to jump to that estimated moment and see its full
@@ -262,6 +260,86 @@ the Range screen, watch, or video import is remembered.
   screen shows the target until you tap **End**.
 - Practice history: shots, points and last club.
 - A tempo drill suggestion.
+
+## Posture coach roadmap
+
+The goal is useful swing feedback from an ordinary iPhone video without
+claiming measurements the camera cannot support. Keep the distinction clear:
+**observed** means visible in this view; **estimated** means inferred from
+noisy 2D landmarks. Never turn a low-confidence estimate into a confident
+fault diagnosis.
+
+### Good candidates for phone-only development
+
+These are observable in a single, steady view and can be useful when the
+golfer is fully in frame. Ship them only with capture-quality checks and
+validation across real users, phones, lighting and camera views.
+
+1. **Capture guidance and pose confidence**
+   - Guide the user to keep the whole body and club in frame, use a steady
+     phone, and choose a supported face-on or down-the-line view.
+   - Detect missing or frequently occluded joints, a golfer too small in frame,
+     and unstable framing. Show a clear "can't measure this clip" state rather
+     than filling gaps with invented values.
+   - Show which landmarks support a metric and suppress it when confidence or
+     visibility is insufficient.
+
+2. **Phase timing and rhythm**
+   - Improve and expose address, top and impact timing, backswing/downswing
+     duration, tempo ratio, and variation across repeated swings.
+   - Mark phases as estimated and let users correct a marker when detection is
+     wrong. Report consistency only across clips with usable pose and timing.
+
+3. **View-specific 2D movement**
+   - Describe movement in image coordinates, normalized to visible body size:
+     for example, head or hip center moving left/right in a face-on clip.
+   - Show the measurement over the video and its time range, and compare swings
+     only when camera view, framing and club are reasonably comparable.
+   - Use neutral language such as "head position moved 6% of torso length
+     toward image-right during the backswing," not "your head sway is wrong."
+     Screen direction is not automatically target direction.
+
+4. **Simple, transparent feedback**
+   - Let users review a measurement, see the frames/landmarks behind it, and
+     compare two swings side by side or phase by phase.
+   - Offer optional drills only for repeatable observations, explain why a
+     drill is suggested, and let users dismiss or correct the observation.
+   - Track trends for the same golfer only after checking that capture setup
+     and confidence are comparable.
+
+### Not reliable from one ordinary phone view alone
+
+Do not present these as measured facts or use them for automated pass/fail
+coaching without a validated method and additional evidence:
+
+- True 3D joint positions, exact joint angles, or depth from a single 2D view.
+- Pelvis/shoulder rotation in degrees, separation ("X-factor"), or precise
+  rotational sequence. A projected angle changes with camera placement and
+  cannot resolve motion toward/away from the camera.
+- Weight transfer, pressure under each foot, ground-reaction force, balance
+  loading, or center-of-mass travel in real-world units. Visible sway is not a
+  measurement of force or pressure.
+- Clubface angle, attack angle, swing path, or hand/club path based only on
+  body landmarks.
+- Universal claims that one posture or movement pattern is correct for every
+  golfer, or injury/medical diagnoses.
+
+These may become research directions with multi-view video, calibrated depth
+or external sensors, plus ground-truth validation. An iPhone's availability of
+depth hardware on some models does not by itself make fast-swing biomechanics
+accurate.
+
+### Reliability gates before calling anything "coaching"
+
+- Validate each metric against manually labeled video or a suitable reference
+  system; publish its expected error and the camera views it supports.
+- Test repeated recordings of the same swing/setup to measure repeatability,
+  and test different bodies, clothing, handedness, lighting and backgrounds.
+- Calibrate confidence so low-quality clips are rejected rather than shown
+  with misleading precision. Keep estimates visually and verbally distinct
+  from directly measured quantities.
+- Start with descriptive feedback and comparison. Add normative ranges or
+  prescriptive coaching only when evidence supports those ranges.
 
 **Apple Watch**
 - **Ready / Recording:**

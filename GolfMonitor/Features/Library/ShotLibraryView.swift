@@ -44,28 +44,7 @@ struct ShotLibraryView: View {
             }
             .background(FloodlightBackground(animated: false))
             .navigationTitle("Swings")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button("Import from Photos", systemImage: "photo") { showPhotosPicker = true }
-                        Button("Import from Files", systemImage: "folder") { showFileImporter = true }
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                    .accessibilityLabel("Import swing video")
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        let url = FileManager.default.temporaryDirectory.appendingPathComponent("GolfMonitor-shots.csv")
-                        try? store.csvString().write(to: url, atomically: true, encoding: .utf8)
-                        export = url
-                    } label: {
-                        Image(systemName: "square.and.arrow.up")
-                    }
-                    .disabled(store.shots.isEmpty)
-                    .accessibilityLabel("Export shots as CSV")
-                }
-            }
+            .toolbar { toolbarContent }
             .sheet(item: $compare) { ProCompareView(shot: $0) }
             .sheet(isPresented: Binding(get: { export != nil }, set: { if !$0 { export = nil } })) {
                 if let export { ShareSheet(items: [export]) }
@@ -76,22 +55,12 @@ struct ShotLibraryView: View {
             .photosPicker(isPresented: $showPhotosPicker, selection: $photoItem, matching: .videos)
             .onChange(of: photoItem) { _, item in
                 guard let item else { return }
-                Task {
-                    do {
-                        guard let video = try await item.loadTransferable(type: ImportedSwingVideo.self) else {
-                            throw SwingImportError.noVideo
-                        }
-                        pendingImport = video
-                    } catch {
-                        importError = error.localizedDescription
-                    }
-                    photoItem = nil
-                }
+                Task { await importPhoto(item) }
             }
             .fileImporter(isPresented: $showFileImporter,
                           allowedContentTypes: [.movie, .mpeg4Movie, .quickTimeMovie]) { result in
                 do {
-                    guard let source = try result.get().first else { throw SwingImportError.noVideo }
+                    let source = try result.get()
                     let hasAccess = source.startAccessingSecurityScopedResource()
                     defer { if hasAccess { source.stopAccessingSecurityScopedResource() } }
                     let destination = FileManager.default.temporaryDirectory
@@ -109,6 +78,44 @@ struct ShotLibraryView: View {
             } message: {
                 Text(importError ?? "Please choose a video and try again.")
             }
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) { importMenu }
+        ToolbarItem(placement: .topBarTrailing) { exportButton }
+    }
+
+    private var importMenu: some View {
+        Menu("Import swing video", systemImage: "plus") {
+            Button("Import from Photos", systemImage: "photo") { showPhotosPicker = true }
+            Button("Import from Files", systemImage: "folder") { showFileImporter = true }
+        }
+    }
+
+    private var exportButton: some View {
+        Button {
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent("GolfMonitor-shots.csv")
+            try? store.csvString().write(to: url, atomically: true, encoding: .utf8)
+            export = url
+        } label: {
+            Image(systemName: "square.and.arrow.up")
+        }
+        .disabled(store.shots.isEmpty)
+        .accessibilityLabel("Export shots as CSV")
+    }
+
+    @MainActor
+    private func importPhoto(_ item: PhotosPickerItem) async {
+        defer { photoItem = nil }
+        do {
+            guard let video = try await item.loadTransferable(type: ImportedSwingVideo.self) else {
+                throw SwingImportError.noVideo
+            }
+            pendingImport = video
+        } catch {
+            importError = error.localizedDescription
         }
     }
 
