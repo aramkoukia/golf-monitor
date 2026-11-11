@@ -1,5 +1,11 @@
 # GolfMonitor
 
+<p align="center">
+  <img src="docs/screenshots/icon-ios.png" width="112" alt="GolfMonitor iPhone app icon">
+  &nbsp;&nbsp;
+  <img src="docs/screenshots/icon-watch.png" width="112" alt="GolfMonitor Apple Watch app icon">
+</p>
+
 A launch monitor and swing analyzer that runs entirely on your iPhone, with an
 Apple Watch remote. Put the phone on a tripod, press record (on the phone or
 the watch), set up, take practice swings, hit the ball, press stop. GolfMonitor
@@ -20,6 +26,33 @@ finds the real strike, measures it, and shows the numbers on both screens.
   tour comparison. See [Features](#features).
 - **Fully on-device.** Core ML, Vision and AVFoundation only. No account, no
   server, no network calls, no third-party packages.
+
+## Screenshots
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/splash.jpg" width="190" alt="Launch intro"><br><sub>Launch intro</sub></td>
+    <td align="center"><img src="docs/screenshots/range-ready.jpg" width="190" alt="Range screen, ready to swing"><br><sub>Range · ready to swing</sub></td>
+    <td align="center"><img src="docs/screenshots/result.jpg" width="190" alt="Result screen"><br><sub>Result · 1/8-speed replay</sub></td>
+    <td align="center"><img src="docs/screenshots/studio.jpg" width="190" alt="Swing Studio"><br><sub>Swing Studio</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/swings.jpg" width="190" alt="Swings library"><br><sub>Swings library</sub></td>
+    <td align="center"><img src="docs/screenshots/insights.jpg" width="190" alt="Insights"><br><sub>Insights</sub></td>
+    <td align="center"><img src="docs/screenshots/practice.jpg" width="190" alt="Practice"><br><sub>Practice · Carry Challenge</sub></td>
+    <td align="center"><img src="docs/screenshots/profile.jpg" width="190" alt="Profile settings"><br><sub>Profile</sub></td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/watch-ready.jpg" width="160" alt="Watch, ready to swing"><br><sub>Watch · ready to swing</sub></td>
+    <td align="center"><img src="docs/screenshots/watch-recording.jpg" width="160" alt="Watch, recording"><br><sub>Watch · recording, ball locked</sub></td>
+    <td align="center"><img src="docs/screenshots/watch-result.jpg" width="160" alt="Watch, result"><br><sub>Watch · result</sub></td>
+  </tr>
+</table>
+
+<sub>iPhone Simulator with the bundled CC0 demo session and demo library (`-gm.demo`); watch screens use `-gm.mockState`.</sub>
 
 ## Run it
 
@@ -44,6 +77,7 @@ checks:
 ```
 -gm.skipOnboarding -gm.autostart 6     # record 6 s, stop, analyze, reveal
 -gm.reset -gm.demo -gm.tab library     # demo library
+-gm.noSplash                           # skip the launch intro
 ```
 
 On the watch: `-gm.autostart 7` presses Start and then Stop over
@@ -261,6 +295,11 @@ Profile also shows:
 - **Privacy & AI:** ball detector and body pose run on device, and the
   network is never used.
 
+**Launch intro:** the launch screen opens straight into a ~2 s intro. The
+lock brackets snap onto the ball and the shot's tracer flies across a
+floodlit range, then it fades into the app. Tap to skip; Reduce Motion gets
+a plain fade.
+
 **First launch:** three onboarding pages cover tripod setup, the one-button
 routine, and privacy, with handedness and the Save-to-Photos choice. After
 that the app asks for camera access.
@@ -278,6 +317,9 @@ stop ─▶ ShotFinder: swings = motion bursts (not at the phone); shot = swing 
                        + body pose (Vision) → swing phases & tempo
      ─▶ ShotStore (clip, analysis.json, thumbnail) ─▶ Photos (optional) ─▶ reveal + watch
 ```
+
+The app icons (iPhone and watch) and the launch artwork are drawn in code. Run
+`swift scripts/render-art.swift` to re-render them into the asset catalogs.
 
 More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Model training:
 [ml/README.md](ml/README.md).

@@ -14,19 +14,17 @@
                         <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" image="GolfMonitorSplash" translatesAutoresizingMaskIntoConstraints="NO" id="launch-artwork">
-                                <rect key="frame" x="26" y="229" width="341" height="341"/>
-                                <constraints>
-                                    <constraint firstItem="launch-artwork" firstAttribute="width" secondItem="launch-artwork" secondAttribute="height" multiplier="1:1" id="artwork-square"/>
-                                    <constraint firstItem="launch-artwork" firstAttribute="width" secondItem="launch-safe-area" secondAttribute="height" multiplier="0.44" id="artwork-size"/>
-                                </constraints>
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFill" image="GolfMonitorSplash" translatesAutoresizingMaskIntoConstraints="NO" id="launch-artwork">
+                                <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
                             </imageView>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="launch-safe-area"/>
                         <color key="backgroundColor" red="0.0196078431" green="0.0235294118" blue="0.0274509804" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                         <constraints>
-                            <constraint firstItem="launch-artwork" firstAttribute="centerX" secondItem="launch-view" secondAttribute="centerX" id="artwork-center-x"/>
-                            <constraint firstItem="launch-artwork" firstAttribute="centerY" secondItem="launch-view" secondAttribute="centerY" id="artwork-center-y"/>
+                            <constraint firstItem="launch-artwork" firstAttribute="top" secondItem="launch-view" secondAttribute="top" id="artwork-top"/>
+                            <constraint firstItem="launch-artwork" firstAttribute="bottom" secondItem="launch-view" secondAttribute="bottom" id="artwork-bottom"/>
+                            <constraint firstItem="launch-artwork" firstAttribute="leading" secondItem="launch-view" secondAttribute="leading" id="artwork-leading"/>
+                            <constraint firstItem="launch-artwork" firstAttribute="trailing" secondItem="launch-view" secondAttribute="trailing" id="artwork-trailing"/>
                         </constraints>
                     </view>
                 </viewController>
@@ -36,6 +34,6 @@
         </scene>
     </scenes>
     <resources>
-        <image name="GolfMonitorSplash" width="1024" height="1024"/>
+        <image name="GolfMonitorSplash" width="1179" height="2556"/>
     </resources>
 </document>

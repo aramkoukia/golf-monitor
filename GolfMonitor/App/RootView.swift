@@ -8,6 +8,9 @@ struct RootView: View {
     @EnvironmentObject private var services: AppServices
     @EnvironmentObject private var camera: CameraController
     @EnvironmentObject private var watchLink: WatchLinkStatus
+    /// Onboarding waits for the launch intro: a full-screen cover would sit
+    /// on top of it.
+    var introFinished = true
 
     var body: some View {
         TabView(selection: $router.tab) {
@@ -25,7 +28,7 @@ struct RootView: View {
         // same view don't present reliably.
         .background {
             Color.clear
-                .fullScreenCover(isPresented: Binding(get: { !settings.hasCompletedOnboarding },
+                .fullScreenCover(isPresented: Binding(get: { introFinished && !settings.hasCompletedOnboarding },
                                                       set: { settings.hasCompletedOnboarding = !$0 })) {
                     OnboardingView()
                 }

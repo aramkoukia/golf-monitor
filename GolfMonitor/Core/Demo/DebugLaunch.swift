@@ -10,6 +10,7 @@ import Foundation
 /// -gm.tab <tab>       start on a tab: range | library | insights | practice | profile
 /// -gm.studio first    open the newest shot that has media in the Swing Studio
 /// -gm.screen <name>   feature-specific deep link (each workstream documents its own)
+/// -gm.noSplash        skip the launch intro
 enum DebugLaunch {
     static let arguments = ProcessInfo.processInfo.arguments
 

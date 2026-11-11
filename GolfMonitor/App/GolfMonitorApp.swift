@@ -6,22 +6,30 @@ import SwiftUI
 struct GolfMonitorApp: App {
     @StateObject private var services = AppServices()
     @Environment(\.scenePhase) private var scenePhase
+    /// The launch intro is on screen (`-gm.noSplash` skips it).
+    @State private var showIntro = !DebugLaunch.flag("noSplash")
 
     var body: some Scene {
         WindowGroup {
-            RootView()
-                .environmentObject(services.store)
-                .environmentObject(services.settings)
-                .environmentObject(services.router)
-                .environmentObject(services)
-                .environmentObject(services.camera)
-                .environmentObject(services.session)
-                .environmentObject(services.remote.link)
-                .preferredColorScheme(.dark)
-                .task { applyDebugLaunch() }
-                .onOpenURL { url in
-                    if url.scheme == "golfmonitor" { services.router.tab = .range }
+            ZStack {
+                RootView(introFinished: !showIntro)
+                if showIntro {
+                    SplashView { showIntro = false }
+                        .zIndex(1)
                 }
+            }
+            .environmentObject(services.store)
+            .environmentObject(services.settings)
+            .environmentObject(services.router)
+            .environmentObject(services)
+            .environmentObject(services.camera)
+            .environmentObject(services.session)
+            .environmentObject(services.remote.link)
+            .preferredColorScheme(.dark)
+            .task { applyDebugLaunch() }
+            .onOpenURL { url in
+                if url.scheme == "golfmonitor" { services.router.tab = .range }
+            }
         }
         .onChange(of: scenePhase) { _, phase in services.scenePhaseChanged(phase) }
     }

@@ -199,6 +199,8 @@ final class WatchSessionModel: NSObject, ObservableObject, WCSessionDelegate {
         mock.revision = (state?.revision ?? 0) + 1
         mock.fps = 240
         mock.ballLocked = true
+        mock.ballLocksSeen = 1
+        mock.readiness = .ready
         mock.club = "7 Iron"
         mock.clubShort = "7i"
         switch phase {
