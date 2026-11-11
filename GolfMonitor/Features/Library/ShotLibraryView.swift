@@ -267,6 +267,7 @@ private struct ShotRow: View {
                         .font(Theme.Font.headline)
                         .foregroundStyle(Theme.Palette.floodlight)
                 }
+                tempoGrade
             }
             Image(systemName: "chevron.right")
                 .font(.caption.bold())
@@ -284,6 +285,19 @@ private struct ShotRow: View {
             .padding(.horizontal, 5)
             .padding(.vertical, 2)
             .overlay(Capsule().strokeBorder(Theme.Palette.hairlineStrong, lineWidth: 1))
+    }
+
+    private var tempoGrade: some View {
+        let rating = SwingFeedback.tempoRating(shot.tempoRatio)
+        let color = rating.map { Theme.color(for: $0) } ?? Theme.Palette.mist
+        return HStack(spacing: 5) {
+            Image(systemName: rating == .needsWork ? "exclamationmark.circle.fill" : "metronome.fill")
+            Text("TEMPO · \(SwingFeedback.tempoLabel(shot.tempoRatio))")
+                .tracking(0.5)
+        }
+        .font(.system(size: 9, weight: .bold).width(.expanded))
+        .foregroundStyle(color)
+        .accessibilityLabel("Tempo rating: \(SwingFeedback.tempoLabel(shot.tempoRatio).lowercased())")
     }
 }
 

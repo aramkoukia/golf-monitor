@@ -78,7 +78,7 @@ enum SwingPhaseDetector {
         guard back > 0.2, down > 0.08 else { return [] }
         let ratio = back / down
         let tour = 2.7...3.3
-        let rating: MetricRating = tour.contains(ratio) ? .tour : ((2.2...3.9).contains(ratio) ? .good : .needsWork)
+        let rating = SwingFeedback.tempoRating(ratio) ?? .unrated
         return [
             SwingMetric(id: "tempo.ratio", name: "Tempo", value: ratio, unit: ":1", tourRange: tour, rating: rating,
                         explanation: "Backswing time divided by downswing time. Tour players average about 3:1."),
@@ -87,5 +87,70 @@ enum SwingPhaseDetector {
             SwingMetric(id: "tempo.downswing", name: "Downswing", value: down, unit: "s", phase: .impact,
                         tourRange: 0.23...0.33, explanation: "Top to impact."),
         ]
+    }
+}
+
+enum SwingFeedback {
+    struct Summary {
+        var focus: String
+        var positive: String
+        var focusRating: MetricRating
+        var positiveRating: MetricRating
+    }
+
+    static func tempoRating(_ ratio: Double) -> MetricRating? {
+        guard ratio.isFinite, ratio > 0 else { return nil }
+        if (2.7...3.3).contains(ratio) { return .tour }
+        if (2.2...3.9).contains(ratio) { return .good }
+        return .needsWork
+    }
+
+    static func tempoLabel(_ ratio: Double) -> String {
+        switch tempoRating(ratio) {
+        case .tour: return "ON REF"
+        case .good: return "NEAR REF"
+        case .needsWork: return "CHECK"
+        case .unrated, .none: return "UNRATED"
+        }
+    }
+
+    static func summary(metrics: [SwingMetric], poseCount: Int, tempoRatio: Double = 0) -> Summary {
+        let tempo = metrics.first { $0.id == "tempo.ratio" }
+        let ratio = tempo?.value ?? tempoRatio
+        let rating = tempoRating(ratio)
+        let poseMetrics = metrics.filter { $0.id.hasPrefix("pose.") }
+
+        let focus: String
+        let focusRating: MetricRating
+        if rating == .needsWork {
+            focus = String(format: "Tempo is %.1f:1, outside the broad 2.2–3.9:1 reference band.", ratio)
+            focusRating = .needsWork
+        } else if let metric = poseMetrics.first {
+            focus = "Review \(metric.name.lowercased()) against a similar swing; this 2D estimate alone cannot establish a fault."
+            focusRating = .unrated
+        } else {
+            focus = "No reliable posture or rhythm issue was established from this clip."
+            focusRating = .unrated
+        }
+
+        let positive: String
+        let positiveRating: MetricRating
+        switch rating {
+        case .tour:
+            positive = String(format: "Tempo is %.1f:1, within the 2.7–3.3:1 reference band.", ratio)
+            positiveRating = .tour
+        case .good:
+            positive = String(format: "Tempo is %.1f:1, within the broader 2.2–3.9:1 reference band.", ratio)
+            positiveRating = .good
+        default:
+            if poseCount > 0 {
+                positive = "Body pose was tracked in \(poseCount) frames; posture remains unscored and can be reviewed in the clip."
+            } else {
+                positive = "No separate positive posture rating can be supported by this clip yet."
+            }
+            positiveRating = .unrated
+        }
+        return Summary(focus: focus, positive: positive,
+                       focusRating: focusRating, positiveRating: positiveRating)
     }
 }

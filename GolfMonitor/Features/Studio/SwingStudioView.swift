@@ -24,6 +24,7 @@ struct SwingStudioView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
                         if let shot {
+                            swingSummary
                             playerSection(for: shot)
                             shotMetrics(shot)
                             phaseSection
@@ -52,6 +53,33 @@ struct SwingStudioView: View {
                 }
                 playbackObserver = nil
             }
+        }
+    }
+
+    private var swingSummary: some View {
+        let metrics = analysis?.metrics ?? []
+        let summary = SwingFeedback.summary(metrics: metrics, poseCount: analysis?.poses.count ?? 0,
+                                            tempoRatio: shot?.tempoRatio ?? 0)
+        return VStack(alignment: .leading, spacing: 10) {
+            Text("Swing snapshot").font(.headline)
+            summaryLine(title: "FOCUS", text: summary.focus, rating: summary.focusRating)
+            summaryLine(title: "POSITIVE", text: summary.positive, rating: summary.positiveRating)
+            Text("Only tempo is rated against a reference. Posture measurements are unscored 2D estimates, not an overall swing score.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .studioPanel()
+    }
+
+    private func summaryLine(title: String, text: String, rating: MetricRating) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.caption2.bold())
+                .tracking(0.8)
+                .foregroundStyle(Theme.color(for: rating))
+            Text(text)
+                .font(.subheadline)
+                .foregroundStyle(Theme.Palette.floodlight)
         }
     }
 
@@ -111,6 +139,14 @@ struct SwingStudioView: View {
         }
     }
 
+    private func insightColor(_ severity: InsightSeverity) -> Color {
+        switch severity {
+        case .positive: return Theme.Palette.ion
+        case .info: return Theme.Palette.mist
+        case .warning: return Theme.Palette.caution
+        }
+    }
+
     private func shotMetrics(_ shot: Shot) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -126,7 +162,8 @@ struct SwingStudioView: View {
                 metric("Club speed", formatSpeed(mph: shot.clubSpeedMph, settings: settings))
                 metric("Launch", shot.hasLaunchData ? String(format: "%.1f°", shot.launchAngleDeg) : "—")
                 metric("Tempo", formatTempo(shot.tempoRatio))
-                metric("Swing score", shot.swingScore.map(String.init) ?? "—")
+                metric("Tempo grade", SwingFeedback.tempoLabel(shot.tempoRatio),
+                       color: tempoColor(shot.tempoRatio))
             }
             if let analysis {
                 Text(analysis.pipeline)
@@ -192,11 +229,14 @@ struct SwingStudioView: View {
             Text("What to review").font(.headline)
             if let insights = analysis?.insights, !insights.isEmpty {
                 ForEach(insights) { insight in
+                    let color = insightColor(insight.severity)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(insight.title).font(.subheadline.weight(.semibold))
+                        Text(insight.title)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(color)
                         Text(insight.detail).font(.caption).foregroundStyle(.secondary)
                         if let drill = insight.drill {
-                            Text("Drill: \(drill)").font(.caption).foregroundStyle(Theme.Palette.ion)
+                            Text("Drill: \(drill)").font(.caption).foregroundStyle(color)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -244,6 +284,7 @@ struct SwingStudioView: View {
                                 .monospacedDigit()
                                 .foregroundStyle(Theme.color(for: item.rating))
                         }
+                        .foregroundStyle(Theme.color(for: item.rating))
                         Text(item.explanation)
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -283,12 +324,17 @@ struct SwingStudioView: View {
         .font(.subheadline.monospacedDigit())
     }
 
-    private func metric(_ title: String, _ value: String) -> some View {
+    private func metric(_ title: String, _ value: String, color: Color = Theme.Palette.floodlight) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title.uppercased()).font(.caption2.bold()).foregroundStyle(.secondary)
-            Text(value).font(.headline.monospacedDigit())
+            Text(value).font(.headline.monospacedDigit()).foregroundStyle(color)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func tempoColor(_ ratio: Double) -> Color {
+        guard let rating = SwingFeedback.tempoRating(ratio) else { return Theme.Palette.mist }
+        return Theme.color(for: rating)
     }
 
     private func loadPlayer() {

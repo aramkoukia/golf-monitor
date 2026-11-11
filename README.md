@@ -239,6 +239,9 @@ the Range screen, watch, or video import is remembered.
   measurements or coaching diagnoses.
 - "What to review" suggestions explain how to inspect those observations in
   the video; they do not label a pose good or bad.
+- Each swing gets an on/near/check/unrated tempo grade. This is a timing
+  reference only, not an overall swing-quality score; posture metrics remain
+  neutral until validated.
 - Metrics grid.
 - Eight phase chips (Address, Takeaway, Halfway Back, Top, Delivery, Impact,
   Release, Finish). Tap one to jump to that estimated moment and see its full

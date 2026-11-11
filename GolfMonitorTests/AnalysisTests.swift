@@ -162,4 +162,33 @@ final class AnalysisTests: XCTestCase {
         XCTAssertTrue(tips.contains { $0.id == "pose.headMovement" && $0.suggestion.contains("Compare") })
         XCTAssertTrue(tips.contains { $0.id == "pose.hipSway" && $0.suggestion.contains("weight transfer") })
     }
+
+    func testSwingFeedbackOnlyGradesTempoAndKeepsPostureNeutral() {
+        XCTAssertEqual(SwingFeedback.tempoLabel(3), "ON REF")
+        XCTAssertEqual(SwingFeedback.tempoLabel(2.5), "NEAR REF")
+        XCTAssertEqual(SwingFeedback.tempoLabel(2.2), "NEAR REF")
+        XCTAssertEqual(SwingFeedback.tempoLabel(3.9), "NEAR REF")
+        XCTAssertEqual(SwingFeedback.tempoLabel(4.2), "CHECK")
+        XCTAssertEqual(SwingFeedback.tempoLabel(0), "UNRATED")
+        XCTAssertEqual(SwingFeedback.tempoLabel(.nan), "UNRATED")
+        XCTAssertEqual(SwingFeedback.tempoLabel(.infinity), "UNRATED")
+
+        let tempo = SwingMetric(id: "tempo.ratio", name: "Tempo", value: 4.2, unit: ":1")
+        let posture = SwingMetric(id: "pose.hipSway", name: "Hip sway", value: 9, unit: "% torso")
+        let summary = SwingFeedback.summary(metrics: [tempo, posture], poseCount: 20)
+        XCTAssertTrue(summary.focus.contains("outside"))
+        XCTAssertTrue(summary.positive.contains("20 frames"))
+        XCTAssertEqual(summary.focusRating, .needsWork)
+        XCTAssertEqual(summary.positiveRating, .unrated)
+
+        let nearTempo = SwingMetric(id: "tempo.ratio", name: "Tempo", value: 2.5, unit: ":1")
+        let nearSummary = SwingFeedback.summary(metrics: [nearTempo, posture], poseCount: 0)
+        XCTAssertTrue(nearSummary.focus.contains("hip sway"))
+        XCTAssertTrue(nearSummary.positive.contains("broader"))
+        XCTAssertEqual(nearSummary.focusRating, .unrated)
+        XCTAssertEqual(nearSummary.positiveRating, .good)
+
+        let savedTempoSummary = SwingFeedback.summary(metrics: [], poseCount: 0, tempoRatio: 3)
+        XCTAssertEqual(savedTempoSummary.positiveRating, .tour)
+    }
 }
