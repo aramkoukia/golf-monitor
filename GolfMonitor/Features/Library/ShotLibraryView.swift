@@ -1,4 +1,6 @@
 import SwiftUI
+import PhotosUI
+import UniformTypeIdentifiers
 
 /// Swings tab: every saved shot, newest first, grouped by day — thumbnail,
 /// the headline numbers, swipe to favourite / delete, tap to open the Swing
@@ -11,6 +13,11 @@ struct ShotLibraryView: View {
     @State private var club: Club?
     @State private var compare: Shot?
     @State private var export: URL?
+    @State private var showPhotosPicker = false
+    @State private var showFileImporter = false
+    @State private var photoItem: PhotosPickerItem?
+    @State private var pendingImport: ImportedSwingVideo?
+    @State private var importError: String?
 
     private var shots: [Shot] { store.shots(for: club) }
 
@@ -28,7 +35,7 @@ struct ShotLibraryView: View {
             Group {
                 if store.shots.isEmpty {
                     EmptyStateView(icon: "figure.golf", title: "No swings yet",
-                                   message: "Record a session on the Range — your shots land here with video, numbers and swing analysis.",
+                                   message: "Record on the Range or import a video from Photos or Files to add swings here.",
                                    actionTitle: "Go to the Range") { router.tab = .range }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
@@ -38,6 +45,15 @@ struct ShotLibraryView: View {
             .background(FloodlightBackground(animated: false))
             .navigationTitle("Swings")
             .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button("Import from Photos", systemImage: "photo") { showPhotosPicker = true }
+                        Button("Import from Files", systemImage: "folder") { showFileImporter = true }
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("Import swing video")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         let url = FileManager.default.temporaryDirectory.appendingPathComponent("GolfMonitor-shots.csv")
@@ -53,6 +69,45 @@ struct ShotLibraryView: View {
             .sheet(item: $compare) { ProCompareView(shot: $0) }
             .sheet(isPresented: Binding(get: { export != nil }, set: { if !$0 { export = nil } })) {
                 if let export { ShareSheet(items: [export]) }
+            }
+            .sheet(item: $pendingImport) { video in
+                SwingImportSheet(videoURL: video.url)
+            }
+            .photosPicker(isPresented: $showPhotosPicker, selection: $photoItem, matching: .videos)
+            .onChange(of: photoItem) { _, item in
+                guard let item else { return }
+                Task {
+                    do {
+                        guard let video = try await item.loadTransferable(type: ImportedSwingVideo.self) else {
+                            throw SwingImportError.noVideo
+                        }
+                        pendingImport = video
+                    } catch {
+                        importError = error.localizedDescription
+                    }
+                    photoItem = nil
+                }
+            }
+            .fileImporter(isPresented: $showFileImporter,
+                          allowedContentTypes: [.movie, .mpeg4Movie, .quickTimeMovie]) { result in
+                do {
+                    guard let source = try result.get().first else { throw SwingImportError.noVideo }
+                    let hasAccess = source.startAccessingSecurityScopedResource()
+                    defer { if hasAccess { source.stopAccessingSecurityScopedResource() } }
+                    let destination = FileManager.default.temporaryDirectory
+                        .appendingPathComponent("golfmonitor-import-\(UUID().uuidString).\(source.pathExtension)")
+                    try FileManager.default.copyItem(at: source, to: destination)
+                    pendingImport = ImportedSwingVideo(url: destination)
+                } catch {
+                    importError = error.localizedDescription
+                }
+            }
+            .alert("Unable to Import Video", isPresented: Binding(
+                get: { importError != nil }, set: { if !$0 { importError = nil } }
+            )) {
+                Button("OK", role: .cancel) { importError = nil }
+            } message: {
+                Text(importError ?? "Please choose a video and try again.")
             }
         }
     }
@@ -184,6 +239,7 @@ private struct ShotRow: View {
                         .font(Theme.Font.mono)
                         .foregroundStyle(Theme.Palette.mist)
                     if shot.source == .demo { badge("DEMO") }
+                    if shot.source == .imported { badge("IMPORTED") }
                     if shot.cameraView == .downTheLine { badge("DTL") }
                     Spacer(minLength: 0)
                     if shot.isFavorite {

@@ -102,11 +102,12 @@ struct ShotFinder {
     ///     swing-only fallback, and a ball must have been gone `minAbsence`.
     ///   - stoppedAtPhone: the recording was stopped on the phone itself, so
     ///     whoever pressed stop walked up to it at the end.
-    func analyze(_ timeline: SceneTimeline, isFinal: Bool = true, stoppedAtPhone: Bool = false) -> Result {
-        // Nobody is mid-swing the instant they press record, so the start is
-        // always "at the phone"; the end only when stop was pressed there.
-        let edges = Edges(start: timeline.motion.first?.t,
-                          end: isFinal && stoppedAtPhone ? timeline.duration : nil)
+    ///   - ignorePhoneEdges: imported clips contain no phone-control movement.
+    func analyze(_ timeline: SceneTimeline, isFinal: Bool = true, stoppedAtPhone: Bool = false,
+                 ignorePhoneEdges: Bool = false) -> Result {
+        // Live recordings include phone-control movement at their edges; imports don't.
+        let edges = ignorePhoneEdges ? Edges.none
+            : Edges(start: timeline.motion.first?.t, end: isFinal && stoppedAtPhone ? timeline.duration : nil)
         guard let levels = self.levels(of: timeline.motion) else { return Result() }
         var candidates = swings(in: levels, edges: edges)
         var shots: [FoundShot] = []

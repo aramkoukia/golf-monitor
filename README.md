@@ -190,8 +190,8 @@ struck ball is saved as its own shot.
 | Spin, side angle, offline | Not measurable from one side-on camera | — |
 
 14 clubs, Driver to Lob Wedge, each with a typical loft and spin for the
-flight model. Pick the club on the Range screen's **CLUB** chip or on the
-watch. The choice is remembered.
+flight model. The Range screen defaults to 7 Iron; the last club selected on
+the Range screen, watch, or video import is remembered.
 
 ## Features
 
@@ -224,6 +224,8 @@ watch. The choice is remembered.
 **Swings** (library)
 - Every shot, newest first and grouped by day, with a thumbnail, club, carry,
   speed and launch, or tempo for swing-only shots.
+- Import videos from Photos or Files. Choose the club, camera view and
+  handedness; swings are analyzed on-device and added to the library.
 - Filter by club. A summary strip shows shots, average carry, best and tempo.
 - Swipe to favourite or delete. The long-press menu has **Open in Swing
   Studio** and **Compare with tour**.

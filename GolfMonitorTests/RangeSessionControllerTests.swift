@@ -286,6 +286,15 @@ final class RangeSessionControllerTests: XCTestCase {
         XCTAssertEqual(controller.currentRemoteState().clubShort, "7i")
     }
 
+    func testClubDefaultsToIronSevenAndRemembersSelection() {
+        XCTAssertEqual(controller.club, .iron7)
+
+        controller.club = .driver
+        let restored = RangeSessionController(camera: camera, monitor: SceneMonitor(locator: SceneMonitorTests.FakeLocator([])),
+                                              processor: processor, settings: settings, store: store, defaults: defaults)
+        XCTAssertEqual(restored.club, .driver)
+    }
+
     func testRemoteStateRevisionsIncrease() {
         let a = controller.currentRemoteState()
         controller.start(origin: .phone)

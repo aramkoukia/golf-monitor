@@ -103,6 +103,14 @@ final class ShotFinderTests: XCTestCase {
         XCTAssertFalse(finder.analyze(timeline, isFinal: false).shots.contains { $0.kind == .swingOnly })
     }
 
+    func testImportedClipKeepsSwingAtStartInsteadOfTreatingItAsPhoneMovement() {
+        var edgeFinder = ShotFinder()
+        edgeFinder.config.edgeMargin = 2
+        let timeline = SceneTimeline(duration: 5, motion: motion(duration: 5, swings: [1...2.6]))
+        XCTAssertTrue(edgeFinder.analyze(timeline).shots.isEmpty, "live recordings ignore motion at the start edge")
+        XCTAssertEqual(edgeFinder.analyze(timeline, ignorePhoneEdges: true).shots.first?.kind, .swingOnly)
+    }
+
     func testStillRecordingHasNoSwingsOrShots() {
         let timeline = SceneTimeline(duration: 10, motion: motion(duration: 10, swings: []),
                                      balls: [ball(duration: 10, absent: [])])

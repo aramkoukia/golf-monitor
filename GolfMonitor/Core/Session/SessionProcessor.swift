@@ -112,7 +112,20 @@ final class SessionProcessor: SessionProcessing {
                 }
             }
         }
-        let found = finder.analyze(timeline, stoppedAtPhone: context.stoppedAtPhone)
+        var found = finder.analyze(timeline, stoppedAtPhone: context.stoppedAtPhone,
+                                   ignorePhoneEdges: context.source == .imported)
+        if context.source == .imported, found.struckCount == 0,
+           let strike = finder.firstStrike(in: timeline) {
+            let swing = found.swings.first {
+                strike.time >= $0.start - finder.config.swingProximity
+                    && strike.time <= $0.end + finder.config.swingProximity
+            }
+            found.shots.removeAll { $0.kind == .swingOnly }
+            found.shots.append(.init(kind: .struck, impactTime: strike.time,
+                                     clipStart: max(0, strike.time - finder.config.preRoll),
+                                     clipEnd: min(timeline.duration, strike.time + finder.config.postRoll),
+                                     ball: strike.ball, swing: swing))
+        }
         guard !found.shots.isEmpty else { throw SessionError.noMotionFound }
 
         var saved: [Shot] = []

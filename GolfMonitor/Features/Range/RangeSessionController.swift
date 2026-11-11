@@ -100,7 +100,7 @@ final class RangeSessionController: ObservableObject {
         self.settings = settings
         self.store = store
         self.defaults = defaults
-        club = defaults.string(forKey: Self.clubKey).flatMap(Club.init(rawValue:)) ?? .driver
+        club = defaults.string(forKey: Self.clubKey).flatMap(Club.init(rawValue:)) ?? .iron7
     }
 
     // MARK: Commands
