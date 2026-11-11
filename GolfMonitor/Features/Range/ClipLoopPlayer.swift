@@ -73,6 +73,7 @@ struct TracerOverlay: View {
     var analysis: SwingAnalysis
     var currentTime: Double
     var mapping: AspectFitMapping
+    var color: Color = Theme.Palette.plasma
 
     var body: some View {
         Canvas { context, _ in
@@ -83,26 +84,30 @@ struct TracerOverlay: View {
                 let ring = Path(ellipseIn: CGRect(x: p.x - 9, y: p.y - 9, width: 18, height: 18))
                 context.stroke(ring, with: .color(Theme.Palette.ion.opacity(currentTime < impact ? 0.9 : 0.35)), lineWidth: 1.5)
             }
-            guard flight.count >= 2 else { return }
-            var path = Path()
-            for (i, point) in flight.enumerated() {
-                let p = mapping.point(CGPoint(x: point.x, y: point.y))
-                if i == 0 { path.move(to: p) } else { path.addLine(to: p) }
+            if flight.count >= 2 {
+                var path = Path()
+                for (i, point) in flight.enumerated() {
+                    let p = mapping.point(CGPoint(x: point.x, y: point.y))
+                    if i == 0 { path.move(to: p) } else { path.addLine(to: p) }
+                }
+                var glow = context
+                glow.addFilter(.blur(radius: 6))
+                glow.stroke(path, with: .color(color.opacity(0.9)),
+                            style: StrokeStyle(lineWidth: 9, lineCap: .round, lineJoin: .round))
+                context.stroke(path, with: .color(color),
+                               style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
+                context.stroke(path, with: .color(.white.opacity(0.8)),
+                               style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
             }
-            var glow = context
-            glow.addFilter(.blur(radius: 6))
-            glow.stroke(path, with: .color(Theme.Palette.plasma.opacity(0.9)),
-                        style: StrokeStyle(lineWidth: 9, lineCap: .round, lineJoin: .round))
-            context.stroke(path, with: .color(Theme.Palette.plasma),
-                           style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
-            context.stroke(path, with: .color(Theme.Palette.tracerCore),
-                           style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
             if let head = flight.last {
                 let p = mapping.point(CGPoint(x: head.x, y: head.y))
                 var bloom = context
                 bloom.addFilter(.blur(radius: 5))
                 bloom.fill(Path(ellipseIn: CGRect(x: p.x - 8, y: p.y - 8, width: 16, height: 16)),
-                           with: .color(Theme.Palette.tracerCore))
+                           with: .color(color))
+                let ring = Path(ellipseIn: CGRect(x: p.x - 10, y: p.y - 10, width: 20, height: 20))
+                context.stroke(ring, with: .color(color),
+                               style: StrokeStyle(lineWidth: 2, lineCap: .round))
                 context.fill(Path(ellipseIn: CGRect(x: p.x - 3.5, y: p.y - 3.5, width: 7, height: 7)), with: .color(.white))
             }
         }

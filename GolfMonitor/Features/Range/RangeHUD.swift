@@ -206,6 +206,9 @@ struct CameraViewPicker: View {
                 .accessibilityLabel("\(option.title) camera view")
                 .accessibilityHint("Selects \(option.title) camera view")
                 .accessibilityAddTraits(view == option ? .isSelected : [])
+                .contextMenu {
+                    Text(option.description)
+                }
             }
         }
         .padding(3)

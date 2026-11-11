@@ -28,6 +28,15 @@ enum CameraView: String, Codable, CaseIterable, Identifiable {
         case .downTheLine: return "DTL"
         }
     }
+
+    var description: String {
+        switch self {
+        case .faceOn:
+            return "Face-On: place the camera facing your chest, perpendicular to the target line. Useful for body movement and measuring ball launch."
+        case .downTheLine:
+            return "Down the Line: place the camera behind you, looking along the target line. Useful for reviewing swing plane; ball speed is not measured."
+        }
+    }
 }
 
 enum Handedness: String, Codable, CaseIterable, Identifiable {

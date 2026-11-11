@@ -231,36 +231,43 @@ private struct ShotRow: View {
     @EnvironmentObject private var settings: SettingsStore
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(alignment: .top, spacing: 16) {
             ShotThumbnail(shot: shot)
                 .frame(width: 58, height: 76)
+                .fixedSize()
             VStack(alignment: .leading, spacing: 5) {
-                HStack(spacing: 6) {
-                    Text(shot.club.shortName)
-                        .font(.system(size: 12, weight: .black).width(.condensed))
-                        .foregroundStyle(Theme.Palette.void)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 2)
-                        .background(Theme.color(for: shot.club), in: Capsule())
-                    Text(shot.date.formatted(date: .omitted, time: .shortened))
-                        .font(Theme.Font.mono)
-                        .foregroundStyle(Theme.Palette.mist)
-                    if shot.source == .demo { badge("DEMO") }
-                    if shot.source == .imported { badge("IMPORTED") }
-                    if shot.cameraView == .downTheLine { badge("DTL") }
-                    Spacer(minLength: 0)
+                HStack {
+                    HStack(spacing: 6) {
+                        Text(shot.club.shortName)
+                            .font(.system(size: 12, weight: .black).width(.condensed))
+                            .foregroundStyle(Theme.Palette.void)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 2)
+                            .background(Theme.color(for: shot.club), in: Capsule())
+                        Text(shot.date.formatted(date: .omitted, time: .shortened))
+                            .font(Theme.Font.mono)
+                            .foregroundStyle(Theme.Palette.mist)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
                     if shot.isFavorite {
                         Image(systemName: "star.fill").font(.caption).foregroundStyle(Theme.Palette.caution)
                     }
                 }
+                HStack(spacing: 6) {
+                    if shot.source == .demo { badge("DEMO") }
+                    if shot.source == .imported { badge("IMPORTED") }
+                    if shot.cameraView == .downTheLine { badge("DTL") }
+                }
                 if shot.hasLaunchData {
-                    HStack(alignment: .firstTextBaseline, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 1) {
                         NumberText(value: settings.distanceValue(yards: shot.carryYards), unit: settings.distanceUnitLabel,
                                    font: Theme.Font.metric(30), prefix: "~")
                         Text("\(Int(settings.speedValue(mph: shot.ballSpeedMph).rounded())) \(settings.speedUnitLabel) · \(String(format: "%.1f°", shot.launchAngleDeg))")
                             .font(Theme.Font.caption)
                             .foregroundStyle(Theme.Palette.mist)
                             .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
                 } else {
                     Text(shot.tempoRatio > 0 ? "Swing · tempo \(String(format: "%.1f", shot.tempoRatio)):1" : "Swing analysis")
@@ -269,6 +276,8 @@ private struct ShotRow: View {
                 }
                 tempoGrade
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(minWidth: 0)
             Image(systemName: "chevron.right")
                 .font(.caption.bold())
                 .foregroundStyle(Theme.Palette.dim)

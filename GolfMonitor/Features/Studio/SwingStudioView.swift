@@ -97,9 +97,8 @@ struct SwingStudioView: View {
                                 frameAspect: CGFloat(analysis.frameWidth) / CGFloat(max(analysis.frameHeight, 1))
                             )
                             ZStack {
-                                if !analysis.ballTrack.isEmpty {
-                                    TrackOverlay(points: analysis.ballTrack, mapping: mapping)
-                                }
+                                TracerOverlay(analysis: analysis, currentTime: playbackTime,
+                                              mapping: mapping, color: Theme.Palette.ion)
                                 if showPose, let pose = analysis.pose(at: playbackTime),
                                    abs(pose.t - playbackTime) < 0.15 {
                                     BodyPoseOverlay(pose: pose, mapping: mapping)
@@ -346,24 +345,6 @@ struct SwingStudioView: View {
         ) { time in
             guard time.seconds.isFinite else { return }
             playbackTime = time.seconds
-        }
-    }
-}
-
-private struct TrackOverlay: View {
-    let points: [TrackPoint]
-    let mapping: AspectFitMapping
-
-    var body: some View {
-        Canvas { context, _ in
-            guard points.count > 1 else { return }
-            var path = Path()
-            for (index, point) in points.enumerated() {
-                let position = mapping.point(CGPoint(x: CGFloat(point.x), y: CGFloat(point.y)))
-                if index == 0 { path.move(to: position) } else { path.addLine(to: position) }
-            }
-            context.stroke(path, with: .color(Theme.Palette.tracerCore),
-                           style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
         }
     }
 }
