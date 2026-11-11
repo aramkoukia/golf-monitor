@@ -102,6 +102,9 @@ struct RemoteState: Codable, Equatable, Sendable {
     /// once; a hidden ball coming back into view doesn't. nil from phones
     /// that predate it.
     var ballLocksSeen: Int?
+    /// Whether a recording started now is likely to be caught and measured
+    /// (camera live phases only). nil from phones that predate it.
+    var readiness: RemoteReadiness?
     /// Live counts while recording.
     var swingsDetected: Int
     var shotsDetected: Int
@@ -128,6 +131,47 @@ struct RemoteState: Codable, Equatable, Sendable {
         guard let current else { return true }
         if epoch != current.epoch { return sentAt >= current.sentAt }
         return revision > current.revision
+    }
+}
+
+/// Whether a recording started now is likely to be caught and measured.
+/// Worked out on the phone from what the camera sees, shown on the phone and
+/// the watch. Advisory: recording is never blocked.
+enum RemoteReadiness: String, Codable, Sendable, CaseIterable {
+    /// Ball locked with room to fly and enough light: ball numbers expected.
+    case ready
+    /// Down the line: the swing is analyzed, the ball isn't.
+    case readySwingOnly
+    /// Face-on, but no ball is locked: a swing would get swing analysis only.
+    case noBall
+    /// The ball is so close to the edge it flies out of that it would leave
+    /// the frame before it can be tracked.
+    case ballAtEdge
+    /// Too dark for the fixed fast shutter: the ball may not be tracked.
+    case tooDark
+
+    var isReady: Bool { self == .ready || self == .readySwingOnly }
+
+    /// Short status label.
+    var label: String {
+        switch self {
+        case .ready: return "READY TO SWING"
+        case .readySwingOnly: return "READY · SWING ONLY"
+        case .noBall: return "NO BALL LOCKED"
+        case .ballAtEdge: return "MOVE BALL"
+        case .tooDark: return "TOO DARK"
+        }
+    }
+
+    /// One line on what it means / what to do.
+    var hint: String {
+        switch self {
+        case .ready: return "Ball locked with room to fly. Start when you're ready."
+        case .readySwingOnly: return "Down the line: your swing is analyzed. Switch to face-on for ball numbers."
+        case .noBall: return "Tee a ball in view — your wrist taps when it locks."
+        case .ballAtEdge: return "The ball is near the edge it flies out of. Give it room in front."
+        case .tooDark: return "Too dark for the fast shutter. Add light, or set Shutter to Auto."
+        }
     }
 }
 

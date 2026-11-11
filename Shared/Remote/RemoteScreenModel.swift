@@ -47,6 +47,12 @@ struct RemoteScreenModel: Equatable {
                 detail: state.message.isEmpty ? "Open GolfMonitor on your iPhone." : state.message,
                 primary: .none, tone: .warning, wantsPreview: false, isConnected: true)
         case .ready:
+            if let readiness = state.readiness {
+                return RemoteScreenModel(
+                    title: readiness.isReady ? "Ready to swing" : "Ready",
+                    detail: readiness.hint,
+                    primary: .start, tone: .plasma, wantsPreview: true, isConnected: true)
+            }
             return RemoteScreenModel(
                 title: state.ballLocked ? "Ball locked" : "Ready",
                 detail: state.ballLocked

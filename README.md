@@ -79,8 +79,8 @@ was the real one; it works that out after you press stop.
 
 **With the Apple Watch (best):**
 
-1. Tee the ball and step back. Wait for the **green brackets** on the ball.
-   The watch **taps your wrist** and shows **BALL LOCKED**.
+1. Tee the ball and step back. Wait for **READY TO SWING** on the watch
+   (it taps your wrist when the ball locks).
 2. Stand at the ball and press **Start** on the watch.
 3. Set up and **hold still for a second or two**.
 4. Swing. Take practice swings first if you like, with a short pause between
@@ -89,7 +89,8 @@ was the real one; it works that out after you press stop.
 
 **Phone only:**
 
-1. Tee the ball and wait for the green brackets.
+1. Tee the ball and wait for the record button's ring to turn **green**
+   ("Ready to swing").
 2. Press **record**, walk to the ball and set up.
 3. **Pause for a moment at address** so walking up and swinging don't run
    into each other.
@@ -100,6 +101,22 @@ was the real one; it works that out after you press stop.
 
 The numbers then appear on the phone, are read out loud ("165 yards carry.
 Ball speed 120.") and show up on the watch.
+
+### Ready to swing
+
+Before you press record, both screens show whether a recording started now
+is likely to be caught and measured. On the phone it's the hint at the top
+and the record button's ring, which turns green when ready and is readable
+from the tee. On the watch it's the status pill and the line under the
+button. It's advice only: you can always start.
+
+| Phone / watch shows | Meaning | Fix |
+|---|---|---|
+| **Ready to swing** (green ring) | A ball is locked, it has room to fly, and there's enough light | Start |
+| **Ready · swing only** (green ring) | Down the Line view: the swing will be analyzed, not the ball | Switch to Face-On for ball numbers |
+| **No ball locked** | No ball has been seen sitting still yet | Tee a ball in view and step back for ~1.5 s |
+| **Move ball** | Every locked ball is in the last quarter of the frame on the target side (the right for a right-hander, the left for a left-hander), so it would leave the frame before it's tracked | Aim the phone or move the ball so there's room in front of it |
+| **Too dark** | The frame is very dark at the fixed fast shutter | Add light, or set Profile › Shutter to Auto |
 
 ### What the app is looking for
 
@@ -145,6 +162,9 @@ watch. The choice is remembered.
 ## Features
 
 **Range** (main tab)
+- **Ready to swing** indicator: a hint and a green record-button ring when a
+  recording started now is likely to be measured (see
+  [Ready to swing](#ready-to-swing)).
 - Live viewfinder at 240 fps with a format badge (e.g. 240 FPS · 1080P), a
   status pill (LIVE / REC) and ball-lock brackets.
 - **CLUB** picker and a Face-On / Down-the-Line toggle. Both lock while
@@ -202,7 +222,8 @@ watch. The choice is remembered.
 - **Ready / Recording:**
   - The live camera preview (about 4 fps) fills the screen, with a red border
     while recording.
-  - Status pill (BALL LOCKED, LIVE · 240 FPS or the recording time).
+  - Status pill: READY TO SWING or what's missing before you start, then
+    the recording time.
   - Big start/stop button with a ring for the recording limit.
 - **Analyzing:** progress ring with the current step.
 - **Result:**
@@ -263,7 +284,7 @@ More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Model training:
 
 ## Tests
 
-91 unit and integration tests, including the full pipeline on 240 fps CC0
+102 unit and integration tests, including the full pipeline on 240 fps CC0
 fixtures (`GolfMonitorTests/Fixtures`, among them a synthetic session with a
 practice swing followed by the real strike).
 

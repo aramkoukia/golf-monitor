@@ -174,6 +174,21 @@ final class RangeSessionControllerTests: XCTestCase {
         XCTAssertEqual(controller.ballLocksSeen, 3)
     }
 
+    func testReadinessReachesTheWatchAndFollowsSettings() {
+        XCTAssertEqual(controller.readiness, .noBall)
+        let published = changes
+        let ball = SceneSnapshot.Lock(id: UUID(), center: CGPoint(x: 0.4, y: 0.7), diameter: 0.02, isPresent: true)
+        controller.updateScene(SceneSnapshot(locks: [ball], brightness: 0.5))
+        XCTAssertEqual(controller.readiness, .ready)
+        XCTAssertEqual(controller.currentRemoteState().readiness, .ready)
+        XCTAssertGreaterThan(changes, published)
+
+        settings.cameraView = .downTheLine
+        XCTAssertTrue(controller.refreshReadiness())
+        XCTAssertEqual(controller.readiness, .readySwingOnly)
+        XCTAssertFalse(controller.refreshReadiness(), "unchanged")
+    }
+
     func testRejectsInvalidCommands() {
         XCTAssertFalse(controller.stop(origin: .watch).accepted)
         camera.isReadyToRecord = false

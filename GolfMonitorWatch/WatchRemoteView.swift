@@ -118,6 +118,7 @@ private struct CaptureView: View {
             VStack(spacing: 6) {
                 StatusPill(recording: recording, startedAt: model.recordingStartedAt,
                            ballLocked: model.state?.ballLocked ?? false,
+                           readiness: model.state?.readiness,
                            fps: model.state?.fps ?? 0)
                 Spacer(minLength: 0)
                 BigButton(recording: recording, pending: model.pendingCommand != nil,
@@ -183,6 +184,8 @@ private struct StatusPill: View {
     var recording: Bool
     var startedAt: Date?
     var ballLocked: Bool
+    /// nil from phones that predate the readiness check.
+    var readiness: RemoteReadiness?
     var fps: Int
 
     var body: some View {
@@ -201,6 +204,13 @@ private struct StatusPill: View {
                         .foregroundStyle(WatchPalette.ion)
                         .accessibilityLabel("Ball locked")
                 }
+            } else if let readiness {
+                Image(systemName: icon(for: readiness))
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(color(for: readiness))
+                Text(readiness.label)
+                    .font(.system(size: 11, weight: .heavy).width(.condensed))
+                    .foregroundStyle(readiness.isReady ? WatchPalette.ion : WatchPalette.floodlight)
             } else {
                 Image(systemName: ballLocked ? "scope" : "viewfinder")
                     .font(.system(size: 11, weight: .bold))
@@ -214,6 +224,23 @@ private struct StatusPill: View {
         .padding(.vertical, 4)
         .background(.ultraThinMaterial, in: Capsule())
         .accessibilityElement(children: .combine)
+    }
+
+    private func icon(for readiness: RemoteReadiness) -> String {
+        switch readiness {
+        case .ready, .readySwingOnly: return "checkmark.circle.fill"
+        case .noBall: return "viewfinder"
+        case .ballAtEdge: return "arrow.left.and.right"
+        case .tooDark: return "sun.min"
+        }
+    }
+
+    private func color(for readiness: RemoteReadiness) -> Color {
+        switch readiness {
+        case .ready, .readySwingOnly: return WatchPalette.ion
+        case .noBall: return WatchPalette.floodlight
+        case .ballAtEdge, .tooDark: return WatchPalette.caution
+        }
     }
 }
 

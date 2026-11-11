@@ -88,6 +88,8 @@ struct SceneSnapshot: Equatable, Sendable {
     /// Normalized frame aspect (width / height) the coordinates refer to.
     var frameAspect: CGFloat = 9.0 / 16.0
     var motionLevel: Float = 0
+    /// Mean frame brightness, 0...1 (nil before the first frame).
+    var brightness: Float? = nil
 
     var isBallLocked: Bool { locks.contains { $0.isPresent } }
     static let empty = SceneSnapshot()

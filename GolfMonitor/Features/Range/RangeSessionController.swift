@@ -46,6 +46,8 @@ final class RangeSessionController: ObservableObject {
     @Published private(set) var feedback: RangeFeedback?
     @Published private(set) var live = LiveCounts()
     @Published private(set) var scene: SceneSnapshot = .empty
+    /// Whether a recording started now is likely to be caught and measured.
+    @Published private(set) var readiness: RemoteReadiness = .noBall
     @Published private(set) var isAppActive = true
     /// Bumped whenever the camera's readiness may have changed (for the UI).
     @Published private(set) var lastRejection: String?
@@ -79,6 +81,7 @@ final class RangeSessionController: ObservableObject {
     /// Every ball the monitor has locked (a ball counts once, however often
     /// it is hidden and seen again). The watch taps when the count goes up.
     private var seenLockIDs = Set<UUID>()
+    private let readinessCheck = RecordingReadiness()
     private(set) var ballLocksSeen = 0
     private var recordingHostStart: Double = 0
     private var limitTask: Task<Void, Never>?
@@ -195,7 +198,20 @@ final class RangeSessionController: ObservableObject {
         seenLockIDs.formUnion(newLocks.map(\.id))
         ballLocksSeen += newLocks.count
         scene = snapshot
-        if lockChanged || !newLocks.isEmpty { changed() }
+        let readinessChanged = refreshReadiness()
+        if lockChanged || !newLocks.isEmpty || readinessChanged { changed() }
+    }
+
+    /// Re-checks readiness (scene or settings changed). True if it changed.
+    @discardableResult
+    func refreshReadiness() -> Bool {
+        let next = readinessCheck.evaluate(
+            RecordingReadiness.Inputs(scene: scene, cameraView: settings.cameraView, handedness: settings.handedness,
+                                      fixedShutter: settings.shutterMode.seconds != nil),
+            previous: readiness)
+        guard next != readiness else { return false }
+        readiness = next
+        return true
     }
 
     /// The camera became (un)available.
@@ -348,6 +364,7 @@ extension RangeSessionController: RemoteCommandHandling {
         state.maxRecordingSeconds = settings.maxRecordingSeconds
         state.ballLocked = scene.isBallLocked
         state.ballLocksSeen = ballLocksSeen
+        state.readiness = readiness
         state.swingsDetected = live.swings
         state.shotsDetected = live.shots
         state.fps = Int(camera.frameRate.rounded())

@@ -66,6 +66,7 @@ final class SceneMonitor {
     private var watched: [WatchedBall] = []
     private var pending: [PendingBall] = []
     private var lastLocateTime = -Double.infinity
+    private var brightness: Float?
     private var detectionInFlight = false
     private var lockQueue: [(candidate: BallCandidate, time: Double)] = []
     private var referenceRefreshPending = false
@@ -107,7 +108,9 @@ final class SceneMonitor {
             let grid = luma.grid(columns: config.gridColumns, rows: config.gridRows)
             let energy = previousGrid.map { meanAbsoluteDifference($0, grid) } ?? 0
             previousGrid = grid
+            let mean = grid.isEmpty ? nil : Float(grid.reduce(0) { $0 + Int($1) }) / Float(grid.count * 255)
             lock.withLock {
+                brightness = mean
                 motion.append(MotionSample(t: time, energy: energy))
                 if referenceRefreshPending { refreshPresentReferences(luma: luma) }
                 adoptQueuedLocks(luma: luma)
@@ -134,6 +137,7 @@ final class SceneMonitor {
             watched = []
             pending = []
             lockQueue = []
+            brightness = nil
         }
         previousGrid = nil
     }
@@ -328,7 +332,7 @@ final class SceneMonitor {
         }
         let recent = motion.suffix(6).map(\.energy)
         let level = recent.isEmpty ? 0 : recent.reduce(0, +) / Float(recent.count)
-        return SceneSnapshot(locks: locks, frameAspect: w / h, motionLevel: level)
+        return SceneSnapshot(locks: locks, frameAspect: w / h, motionLevel: level, brightness: brightness)
     }
 }
 

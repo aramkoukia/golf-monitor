@@ -9,6 +9,9 @@ import SwiftUI
 struct RecordButton: View {
     var isRecording: Bool
     var isEnabled: Bool
+    /// A recording started now is likely to be caught and measured: the ring
+    /// turns green (readable from the tee).
+    var isReady = false
     /// 0...1 of the recording time limit used.
     var limitFraction: Double
     var action: () -> Void
@@ -20,8 +23,10 @@ struct RecordButton: View {
         Button(action: action) {
             ZStack {
                 Circle()
-                    .stroke(Color.white.opacity(0.9), lineWidth: 4)
+                    .stroke(isReady && !isRecording ? Theme.Palette.ion : Color.white.opacity(0.9),
+                            lineWidth: isReady && !isRecording ? 5 : 4)
                     .frame(width: 84, height: 84)
+                    .shadow(color: isReady && !isRecording ? Theme.Palette.ion.opacity(0.7) : .clear, radius: 8)
                 if isRecording {
                     Circle()
                         .trim(from: 0, to: limitFraction)
@@ -43,12 +48,13 @@ struct RecordButton: View {
         .disabled(!isEnabled)
         .opacity(isEnabled ? 1 : 0.45)
         .animation(Theme.Motion.bouncy, value: isRecording)
+        .animation(Theme.Motion.snappy, value: isReady)
         .onAppear {
             guard !reduceMotion else { return }
             withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) { breathe = true }
         }
         .sensoryFeedback(.impact(weight: .heavy), trigger: isRecording)
-        .accessibilityLabel(isRecording ? "Stop recording" : "Start recording")
+        .accessibilityLabel(isRecording ? "Stop recording" : (isReady ? "Start recording, ready to swing" : "Start recording"))
         .accessibilityHint(isRecording ? "Stops and analyzes your session" : "Records until you stop: set up, practice swings, then hit")
     }
 }

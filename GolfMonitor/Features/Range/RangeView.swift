@@ -87,7 +87,7 @@ struct RangeView: View {
                 RecordingClock(startedAt: startedAt, limit: settings.maxRecordingSeconds)
                     .transition(.move(edge: .top).combined(with: .opacity))
             } else if camera.status.isLive, session.phase == .idle {
-                ballHint
+                readinessHint
             }
             if let notice {
                 Label(notice, systemImage: "exclamationmark.circle.fill")
@@ -117,6 +117,7 @@ struct RangeView: View {
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 RecordButton(isRecording: session.phase.isRecording,
                              isEnabled: session.phase.isRecording || (camera.isReadyToRecord && session.phase == .idle),
+                             isReady: session.readiness.isReady && camera.isReadyToRecord && session.phase == .idle,
                              limitFraction: limitFraction(at: context.date)) {
                     if session.phase.isRecording {
                         session.stop(origin: .phone)
@@ -138,19 +139,27 @@ struct RangeView: View {
         return min(1, date.timeIntervalSince(startedAt) / max(settings.maxRecordingSeconds, 1))
     }
 
-    private var ballHint: some View {
-        let locked = session.scene.isBallLocked
-        return Label(locked ? "Ball locked — press record when you're ready"
-                            : (settings.cameraView == .faceOn ? "Tee a ball in view to measure flight"
-                                                              : "Down-the-line: swing analysis"),
-                     systemImage: locked ? "scope" : "viewfinder")
+    /// Whether a recording started now is likely to be caught and measured.
+    private var readinessHint: some View {
+        let readiness = session.readiness
+        let (text, icon, color): (String, String, Color) = switch readiness {
+        case .ready: ("Ready to swing — ball locked with room to fly", "checkmark.circle.fill", Theme.Palette.ion)
+        case .readySwingOnly: ("Ready — down the line: swing analysis", "checkmark.circle.fill", Theme.Palette.ion)
+        case .noBall: ("Tee a ball in view to measure flight", "viewfinder", Theme.Palette.floodlight)
+        case .ballAtEdge: ("Ball too close to the frame edge — give it room to fly", "arrow.left.and.right",
+                           Theme.Palette.caution)
+        case .tooDark: ("Too dark for the \(settings.shutterMode.title) shutter — add light or set Shutter to Auto",
+                        "sun.min", Theme.Palette.caution)
+        }
+        return Label(text, systemImage: icon)
             .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(locked ? Theme.Palette.ion : Theme.Palette.floodlight)
+            .foregroundStyle(color)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .glassCapsule()
             .contentTransition(.opacity)
-            .animation(Theme.Motion.snappy, value: locked)
+            .animation(Theme.Motion.snappy, value: readiness)
+            .accessibilityLabel(readiness.isReady ? "Ready to swing" : text)
     }
 
     private var practiceBanner: some View {
