@@ -176,29 +176,40 @@ struct ClubMenuChip: View {
     }
 }
 
-struct CameraViewToggle: View {
+struct CameraViewPicker: View {
     @Binding var view: CameraView
 
     var body: some View {
-        Button {
-            Haptics.select()
-            view = view == .faceOn ? .downTheLine : .faceOn
-        } label: {
-            VStack(spacing: 1) {
-                Image(systemName: view == .faceOn ? "person.fill" : "arrow.up.forward")
-                    .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(Theme.Palette.floodlight)
-                    .contentTransition(.symbolEffect(.replace))
-                Text(view.shortTitle)
-                    .font(.system(size: 8, weight: .bold).width(.expanded))
-                    .foregroundStyle(Theme.Palette.mist)
+        HStack(spacing: 2) {
+            ForEach(CameraView.allCases) { option in
+                Button {
+                    guard view != option else { return }
+                    Haptics.select()
+                    view = option
+                } label: {
+                    VStack(spacing: 2) {
+                        Image(systemName: option == .faceOn ? "person.fill" : "arrow.up.forward")
+                            .font(.system(size: 15, weight: .bold))
+                        Text(option.shortTitle)
+                            .font(.system(size: 9, weight: .bold).width(.expanded))
+                    }
+                    .foregroundStyle(view == option ? Theme.Palette.floodlight : Theme.Palette.mist)
+                    .frame(width: 54, height: 52)
+                    .background {
+                        if view == option {
+                            Capsule().fill(Theme.Palette.ion.opacity(0.2))
+                        }
+                    }
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(option.title) camera view")
+                .accessibilityHint("Selects \(option.title) camera view")
+                .accessibilityAddTraits(view == option ? .isSelected : [])
             }
-            .frame(width: 58, height: 58)
-            .glassCapsule(interactive: true, clear: true)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Camera view, \(view.title)")
-        .accessibilityHint("Face-on measures ball flight; down-the-line analyzes the swing")
+        .padding(3)
+        .glassCapsule(interactive: true, clear: true)
     }
 }
 

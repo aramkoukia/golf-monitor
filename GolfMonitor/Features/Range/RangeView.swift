@@ -127,7 +127,7 @@ struct RangeView: View {
                 }
             }
             Spacer()
-            CameraViewToggle(view: $settings.cameraView)
+            CameraViewPicker(view: $settings.cameraView)
                 .disabled(session.phase.isRecording)
                 .opacity(session.phase.isRecording ? 0.4 : 1)
         }
