@@ -76,6 +76,10 @@ final class RangeSessionController: ObservableObject {
     /// Overrides the settings' recording limit (tests).
     var recordingLimitOverride: TimeInterval?
 
+    /// Every ball the monitor has locked (a ball counts once, however often
+    /// it is hidden and seen again). The watch taps when the count goes up.
+    private var seenLockIDs = Set<UUID>()
+    private(set) var ballLocksSeen = 0
     private var recordingHostStart: Double = 0
     private var limitTask: Task<Void, Never>?
     private var liveTask: Task<Void, Never>?
@@ -138,9 +142,12 @@ final class RangeSessionController: ObservableObject {
         progress = .start
         phase = .processing
         changed()
+        // Stopped with the phone's button, or by leaving the app: either way
+        // the golfer walked up to the phone at the end of the recording.
         let context = SessionContext(club: club, cameraView: settings.cameraView, handedness: settings.handedness,
                                      saveShotsToPhotos: settings.saveShotsToPhotos,
-                                     saveSessionToPhotos: settings.saveSessionToPhotos)
+                                     saveSessionToPhotos: settings.saveSessionToPhotos,
+                                     stoppedAtPhone: origin == .phone || !isAppActive)
         processingTask = Task { [weak self] in await self?.finishRecording(context) }
         return .ok
     }
@@ -184,8 +191,11 @@ final class RangeSessionController: ObservableObject {
 
     func updateScene(_ snapshot: SceneSnapshot) {
         let lockChanged = snapshot.isBallLocked != scene.isBallLocked
+        let newLocks = snapshot.locks.filter { $0.isPresent && !seenLockIDs.contains($0.id) }
+        seenLockIDs.formUnion(newLocks.map(\.id))
+        ballLocksSeen += newLocks.count
         scene = snapshot
-        if lockChanged { changed() }
+        if lockChanged || !newLocks.isEmpty { changed() }
     }
 
     /// The camera became (un)available.
@@ -337,6 +347,7 @@ extension RangeSessionController: RemoteCommandHandling {
         state.clubShort = club.shortName
         state.maxRecordingSeconds = settings.maxRecordingSeconds
         state.ballLocked = scene.isBallLocked
+        state.ballLocksSeen = ballLocksSeen
         state.swingsDetected = live.swings
         state.shotsDetected = live.shots
         state.fps = Int(camera.frameRate.rounded())

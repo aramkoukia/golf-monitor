@@ -83,7 +83,7 @@ enum SessionError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .unreadableRecording: return "The recording couldn't be read."
-        case .noMotionFound: return "No swing was found in the recording. Keep the whole swing in frame and try again."
+        case .noMotionFound: return "No swing was found in the recording. Keep the whole swing in frame, and stand still for a moment before and after you swing."
         case .clipExportFailed: return "The shot clip couldn't be cut from the recording."
         case .cameraNotReady: return "The camera isn't ready yet."
         case .recordingFailed(let reason): return "Recording failed: \(reason)"

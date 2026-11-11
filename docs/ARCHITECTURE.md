@@ -60,10 +60,26 @@ in progress.
   (the golfer or the club) and is restored.
 
 `ShotFinder` (pure, unit-tested) turns the timeline into swings and shots.
-A shot is the earliest disappearance during a swing; several balls vanishing
-at once means the camera moved, so those are ignored. Impact is pinned to
-where the patch jumps to its final level. With no strike, the last swing is
-kept as a swing-only analysis.
+
+- **Swings** are bursts of smoothed motion above a bar. The still level is
+  the 10th percentile of the recording's motion, and the noise is the spread
+  of its quietest 30%. The bar sits 0.006–0.010 above the still level, capped
+  below the 0.012 rise a swing needs, so a recording that is mostly movement
+  can't hide its own swing.
+- A burst longer than 4 s (walk up → set up → swing with no pause) is
+  **split at its deepest dip**, if that dip falls to 60 % of the lower peak
+  beside it.
+- **Motion at the phone** isn't a swing. That means a burst already going on
+  within 0.25 s of the recording's start, or of its end when stop was
+  pressed on the phone (or the app was left). These bursts are split off
+  where possible and otherwise dropped, unless a ball was struck in them.
+- A **shot** is the earliest disappearance during a swing. Several balls
+  vanishing at once means the camera moved, so those are ignored. Impact is
+  pinned to where the patch jumps to its final level. A ball that left during
+  motion that didn't qualify as a swing (too long, too short) still makes a
+  shot. A disappearance with no motion at all does not.
+- With no strike, the last swing is kept as a swing-only analysis. With no
+  swing at all, the recording fails with "No swing was found".
 
 ## Measuring it (`Core/Analysis`)
 

@@ -137,6 +137,43 @@ final class RangeSessionControllerTests: XCTestCase {
         XCTAssertNil(processor.received.last?.0.timeline, "simulated camera: scan the file instead")
     }
 
+    func testProcessorIsToldWhereStopWasPressed() async {
+        for (origin, atPhone) in [(RangeSessionController.Origin.phone, true), (.watch, false), (.system, false)] {
+            controller.start(origin: .phone)
+            controller.stop(origin: origin)
+            await waitForPhase { $0 == .review }
+            XCTAssertEqual(processor.received.last?.1.stoppedAtPhone, atPhone, "\(origin)")
+            controller.dismissResult()
+        }
+        controller.start(origin: .watch)
+        controller.setAppActive(false)
+        await waitForPhase { $0 == .review }
+        XCTAssertEqual(processor.received.last?.1.stoppedAtPhone, true, "leaving the app means someone was at the phone")
+    }
+
+    func testEachNewBallLockIsCountedOnceAndPublished() {
+        func lock(_ id: UUID, present: Bool = true) -> SceneSnapshot.Lock {
+            SceneSnapshot.Lock(id: id, center: CGPoint(x: 0.5, y: 0.6), diameter: 0.02, isPresent: present)
+        }
+        let teed = UUID(), loose = UUID(), next = UUID()
+        controller.updateScene(SceneSnapshot(locks: [lock(teed)]))
+        XCTAssertEqual(controller.currentRemoteState().ballLocksSeen, 1)
+
+        let published = changes
+        controller.updateScene(SceneSnapshot(locks: [lock(teed), lock(loose)]))
+        XCTAssertEqual(controller.ballLocksSeen, 2)
+        XCTAssertGreaterThan(changes, published, "a new lock is sent even though a ball was already locked")
+
+        controller.updateScene(SceneSnapshot(locks: [lock(teed, present: false), lock(loose)]))
+        controller.updateScene(SceneSnapshot(locks: [lock(teed), lock(loose)]))
+        XCTAssertEqual(controller.ballLocksSeen, 2, "a hidden ball coming back is not a new lock")
+
+        controller.updateScene(SceneSnapshot(locks: [lock(next, present: false)]))
+        XCTAssertEqual(controller.ballLocksSeen, 2, "counted once it's actually visible")
+        controller.updateScene(SceneSnapshot(locks: [lock(next)]))
+        XCTAssertEqual(controller.ballLocksSeen, 3)
+    }
+
     func testRejectsInvalidCommands() {
         XCTAssertFalse(controller.stop(origin: .watch).accepted)
         camera.isReadyToRecord = false

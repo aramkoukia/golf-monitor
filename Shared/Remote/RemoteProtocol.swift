@@ -98,6 +98,10 @@ struct RemoteState: Codable, Equatable, Sendable {
     var progress: Double?
     /// A ball is locked in the hitting zone.
     var ballLocked: Bool
+    /// Balls locked since the phone app started. Each newly teed ball counts
+    /// once; a hidden ball coming back into view doesn't. nil from phones
+    /// that predate it.
+    var ballLocksSeen: Int?
     /// Live counts while recording.
     var swingsDetected: Int
     var shotsDetected: Int
@@ -124,6 +128,27 @@ struct RemoteState: Codable, Equatable, Sendable {
         guard let current else { return true }
         if epoch != current.epoch { return sentAt >= current.sentAt }
         return revision > current.revision
+    }
+}
+
+/// When the watch taps to say "ball locked, you can swing": once per newly
+/// locked ball while the camera is live (ready or recording), never for a
+/// hidden ball coming back into view, at most once every `minInterval`
+/// (several loose balls locking together), and only for fresh news: a
+/// state that waited for the wrist to come up is already on screen.
+struct BallLockCue {
+    var minInterval: TimeInterval = 2
+    var maxAge: TimeInterval = 4
+    private(set) var lastCue: Date?
+
+    mutating func shouldTap(previous: RemoteState?, incoming: RemoteState, now: Date = Date()) -> Bool {
+        guard let previous, previous.epoch == incoming.epoch,
+              incoming.phase == .ready || incoming.phase == .recording,
+              (incoming.ballLocksSeen ?? 0) > (previous.ballLocksSeen ?? 0),
+              now.timeIntervalSince(incoming.sentAt) < maxAge else { return false }
+        if let lastCue, now.timeIntervalSince(lastCue) < minInterval { return false }
+        lastCue = now
+        return true
     }
 }
 

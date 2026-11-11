@@ -18,6 +18,9 @@ struct SessionContext {
     var saveShotsToPhotos: Bool
     var saveSessionToPhotos: Bool
     var source: ShotSource = .live
+    /// Stop was pressed on the phone itself, so the end of the recording is
+    /// the golfer walking up to it (see `ShotFinder.analyze`).
+    var stoppedAtPhone = false
 }
 
 struct ProcessingProgress: Equatable {
@@ -109,7 +112,7 @@ final class SessionProcessor: SessionProcessing {
                 }
             }
         }
-        let found = finder.analyze(timeline)
+        let found = finder.analyze(timeline, stoppedAtPhone: context.stoppedAtPhone)
         guard !found.shots.isEmpty else { throw SessionError.noMotionFound }
 
         var saved: [Shot] = []

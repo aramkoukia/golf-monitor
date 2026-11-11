@@ -7,16 +7,17 @@ finds the real strike, measures it, and shows the numbers on both screens.
 
 - **One-button routine.** A single continuous recording covers everything.
   Practice swings are detected and ignored. The shot is the swing during which
-  the teed ball disappears.
+  the teed ball disappears. See [Recording a shot](#recording-a-shot).
 - **No separate ball-detection step.** The bundled ball detector runs in the
   background, locks onto the ball (green brackets in the viewfinder) and uses
   its measured size to calibrate distances automatically.
-- **Apple Watch remote.** It shows a live camera preview, starts and stops the
-  recording, and shows the result (carry, ball speed, launch) with haptics for
-  each state. When the watch starts a recording, the phone switches to the
-  Range screen and shows that it is recording.
-- **Save to Photos (optional).** Profile › Photos can save each analyzed shot
-  clip, and optionally the full recording, to your photo library.
+- **Launch numbers and swing analysis.** Ball speed, launch angle, carry,
+  apex, hang time and descent from a face-on camera, plus tempo and eight
+  swing phases from body pose. See [What it measures](#what-it-measures).
+- **Apple Watch remote.** Live camera preview, start/stop, club picker and the
+  result on your wrist, with haptics for each state.
+- **Swings library, Swing Studio, Insights, a Carry Challenge** and a
+  tour comparison. See [Features](#features).
 - **Fully on-device.** Core ML, Vision and AVFoundation only. No account, no
   server, no network calls, no third-party packages.
 
@@ -67,9 +68,181 @@ WatchConnectivity, and `-gm.mockState result` shows a canned screen
 - Keep the ball in view with ~2 m of open space in front of it. A fast shutter
   (Profile › Shutter, 1/2000 by default) freezes the ball; switch to Auto in
   dim light.
-- Wait for the green brackets on the ball, then press record. Take your time:
-  practice swings are fine. Hit, then press stop (or let the recording limit
-  stop it).
+- Keep the whole swing in frame, from address to finish.
+
+## Recording a shot
+
+One recording covers the whole routine. You don't tell the app which swing
+was the real one; it works that out after you press stop.
+
+### The routine
+
+**With the Apple Watch (best):**
+
+1. Tee the ball and step back. Wait for the **green brackets** on the ball.
+   The watch **taps your wrist** and shows **BALL LOCKED**.
+2. Stand at the ball and press **Start** on the watch.
+3. Set up and **hold still for a second or two**.
+4. Swing. Take practice swings first if you like, with a short pause between
+   each.
+5. Hold your finish or watch the ball, then press **Stop**.
+
+**Phone only:**
+
+1. Tee the ball and wait for the green brackets.
+2. Press **record**, walk to the ball and set up.
+3. **Pause for a moment at address** so walking up and swinging don't run
+   into each other.
+4. Swing, then watch the ball for a second or two.
+5. Walk back and press **stop**. The recording also stops on its own at the
+   recording limit (Profile › Recording limit, 3 minutes by default), or if
+   you leave the app.
+
+The numbers then appear on the phone, are read out loud ("165 yards carry.
+Ball speed 120.") and show up on the watch.
+
+### What the app is looking for
+
+| Step | What it detects | What it needs from you |
+|---|---|---|
+| Ball lock | A ball that sits still in the same spot for three detector passes, half a second apart | About **1.5 s** with the ball still and nobody standing over it. The lock carries over into the recording and survives you walking past it |
+| Swing | A burst of movement **0.3–4 s** long. A pause separates one swing from the next | A moment of stillness before and after the swing. Walking up and swinging with no pause gets split at the slowest moment in between |
+| You at the phone | Movement right at the start of the recording, and at the end when stop was pressed on the phone | Nothing. This is ignored, so walking to the ball and back never counts as a swing |
+| Shot | The swing during which the locked ball disappears for good (gone for 0.6 s, or 0.2 s if the recording stops right after) | A ball locked **before** you take the club back |
+| Practice swing | Every other swing (the ball stays put) | Nothing. Take as many as you like |
+
+While recording, the strip at the bottom of the Range screen counts what has
+been seen so far (**N SWINGS**, **SHOT ✓**). The watch shows the same:
+"N swings seen · hit when ready", then "Shot detected — tap stop when you're
+done." One recording can hold several shots (up to six are analyzed). Every
+struck ball is saved as its own shot.
+
+### If something goes wrong
+
+| You see | It means | Try |
+|---|---|---|
+| "No swing was found in the recording…" | No swing-shaped movement at all, outside the walk to and from the phone | Keep the whole swing in frame. Pause briefly before and after the swing. Don't stop the recording mid-swing |
+| "Swing analyzed" / "No ball strike found · swing saved" | A swing was found but no locked ball left during it, so you get tempo and phases only | Wait for the green brackets **before** swinging. If you tee the ball after pressing record, give it ~1.5 s to lock. Use face-on |
+| "Strike found" / "Strike found — ball flight unclear" | The ball left, but it wasn't tracked in enough frames after impact | More light, a faster shutter, open space in front of the ball |
+| "Down-the-line view analyzes the swing…" | Camera position is set to Down the Line | Switch to Face-On (FO) for ball numbers |
+
+## What it measures
+
+| Number | How | Trust |
+|---|---|---|
+| Ball speed | Line fit (RANSAC) through the ball's positions in the frames after impact; pixels → metres from the ball's measured diameter (42.67 mm) | ● measured |
+| Launch angle | Elevation of the same fitted velocity (side view = vertical plane) | ● measured |
+| Carry, apex, hang time, descent | Drag + Magnus flight model with the club's *typical* spin | ◐ estimate, roughly ±10 % |
+| Club speed, smash | Ball speed ÷ the club's typical smash factor | ◐ estimate |
+| Tempo, backswing, downswing | Takeaway → top → impact, from body pose and the measured impact frame | ● measured |
+| Swing phases | Address, top, impact and finish from body pose (Apple Vision); takeaway, halfway back, delivery and release in between | ● / ◐ |
+| Spin, side angle, offline | Not measurable from one side-on camera | — |
+
+14 clubs, Driver to Lob Wedge, each with a typical loft and spin for the
+flight model. Pick the club on the Range screen's **CLUB** chip or on the
+watch. The choice is remembered.
+
+## Features
+
+**Range** (main tab)
+- Live viewfinder at 240 fps with a format badge (e.g. 240 FPS · 1080P), a
+  status pill (LIVE / REC) and ball-lock brackets.
+- **CLUB** picker and a Face-On / Down-the-Line toggle. Both lock while
+  recording.
+- Record button with a ring that fills toward the recording limit, a
+  recording clock, and a red glow around the screen while recording.
+- Routine strip (START → PRACTICE → HIT → STOP) with live swing and shot
+  counts.
+- Analyzing screen with progress through "Finding your shot", "Measuring ball
+  flight", "Reading your swing" and "Saving". Analysis can be cancelled, and
+  it keeps running briefly if the phone locks.
+- **Result screen:**
+  - "New personal best" (per club, by carry), "Shot measured", "Strike found"
+    or "Swing analyzed".
+  - A 1/8-speed slow-motion loop of impact with the ball tracer drawn in
+    sync.
+  - Big carry number, ball speed and launch.
+  - Tiles for club speed, apex, hang time, descent, tempo and backswing.
+  - Chips for practice swings counted, strikes found and Saved to Photos.
+  - **Next shot**, **Swing Studio** and **Discard** buttons.
+- **Voice readout** of the result ("Speak results", on by default).
+
+**Swings** (library)
+- Every shot, newest first and grouped by day, with a thumbnail, club, carry,
+  speed and launch, or tempo for swing-only shots.
+- Filter by club. A summary strip shows shots, average carry, best and tempo.
+- Swipe to favourite or delete. The long-press menu has **Open in Swing
+  Studio** and **Compare with tour**.
+- Export every shot as CSV (always in mph and yards).
+
+**Swing Studio**
+- The shot video with the ball path drawn on top.
+- Metrics grid.
+- Eight phase chips (Address, Takeaway, Halfway Back, Top, Delivery, Impact,
+  Release, Finish). Tap one to jump to that moment.
+- Tempo, backswing and downswing, rated against tour tempo (~3:1).
+
+**You vs PGA Tour**
+- Carry, ball speed, club speed, smash, launch and apex next to tour averages
+  for the same club (Driver to Pitching Wedge).
+
+**Insights**
+- Measured shots, average carry, average ball speed and best carry.
+- A carry trend chart of the last 20 measured shots.
+- Average carry by club.
+
+**Practice**
+- **Carry Challenge:** five shots aimed at 150 yds; each measured shot that
+  lands within 15 yds scores 10 points. Start it from Practice; the Range
+  screen shows the target until you tap **End**.
+- Practice history: shots, points and last club.
+- A tempo drill suggestion.
+
+**Apple Watch**
+- **Ready / Recording:**
+  - The live camera preview (about 4 fps) fills the screen, with a red border
+    while recording.
+  - Status pill (BALL LOCKED, LIVE · 240 FPS or the recording time).
+  - Big start/stop button with a ring for the recording limit.
+- **Analyzing:** progress ring with the current step.
+- **Result:**
+  - Carry, ball speed, launch and smash, or the reason there's no ball data
+    and your tempo.
+  - The practice swing count and a **Next shot** button.
+- **Club picker:** tap the club name in the toolbar.
+- **Haptics** for start, stop, result, errors and the camera becoming ready.
+- **Ball-lock tap:** a tap when a newly teed ball locks, before or during a
+  recording. It comes once per ball: stepping over the ball and away again
+  doesn't repeat it, and several balls locking together give one tap. While
+  recording, a lock icon sits next to the timer.
+- When the watch starts a recording, the phone switches to the Range screen.
+  The GolfMonitor app must be open on the iPhone (see Limitations).
+
+**Profile** (settings)
+
+| Setting | Options | Default |
+|---|---|---|
+| Swing | Right-handed / Left-handed | Right-handed |
+| Camera position | Face-On / Down the Line | Face-On |
+| Shutter | Auto, 1/1000, 1/2000, 1/4000 | 1/2000 |
+| Recording limit | 1, 2, 3, 5, 10 min | 3 min |
+| Speak results | on / off | on |
+| Haptics | on / off | on |
+| Save shot videos to Photos | on / off | off |
+| Also save the full recording | on / off | off |
+| Speed | mph / km/h | mph |
+| Distance | yards / meters | yards |
+
+Profile also shows:
+- **Apple Watch:** connection status.
+- **Data:** shot count and video storage, **Export shots (CSV)** and **Delete
+  all shots**.
+- **Privacy & AI:** ball detector and body pose run on device, and the
+  network is never used.
+
+**First launch:** three onboarding pages cover tripod setup, the one-button
+routine, and privacy, with handedness and the Save-to-Photos choice. After
+that the app asks for camera access.
 
 ## How it works
 
@@ -78,28 +251,19 @@ camera (240 fps, 420f) ─┬─▶ HEVC recording (temp file)
                         ├─▶ SceneMonitor @30 Hz ── motion energy + ball presence
                         │       └─ GolfDetector (Core ML) locks stationary balls ~2×/s
                         └─▶ WatchPreviewStreamer ── 4 fps JPEG ─▶ Apple Watch
-stop ─▶ ShotFinder: swings = motion bursts; shot = swing where a locked ball vanished
+stop ─▶ ShotFinder: swings = motion bursts (not at the phone); shot = swing where a locked ball vanished
      ─▶ ClipExporter: cut [impact − 2.4 s, impact + 1.4 s] (no re-encode)
      ─▶ SwingAnalyzer: LaunchMeasurer (ball speed & launch) → FlightModel (carry…)
                        + body pose (Vision) → swing phases & tempo
      ─▶ ShotStore (clip, analysis.json, thumbnail) ─▶ Photos (optional) ─▶ reveal + watch
 ```
 
-| Number | How | Trust |
-|---|---|---|
-| Ball speed | Line fit (RANSAC) through the ball's positions in the frames after impact; pixels → metres from the ball's measured diameter (42.67 mm) | ● measured |
-| Launch angle | Elevation of the same fitted velocity (side view = vertical plane) | ● measured |
-| Carry, apex, hang time, descent | Drag + Magnus flight model with the club's *typical* spin | ◐ estimate, roughly ±10 % |
-| Club speed | Ball speed ÷ the club's typical smash factor | ◐ estimate |
-| Tempo | Takeaway → top → impact, from body pose and the measured impact frame | ● measured |
-| Spin, side angle | Not measurable from one side-on camera | — |
-
 More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Model training:
 [ml/README.md](ml/README.md).
 
 ## Tests
 
-77 unit and integration tests, including the full pipeline on 240 fps CC0
+91 unit and integration tests, including the full pipeline on 240 fps CC0
 fixtures (`GolfMonitorTests/Fixtures`, among them a synthetic session with a
 practice swing followed by the real strike).
 
@@ -115,11 +279,19 @@ scripts/run-tests.sh            # same tests, injected straight into the app
 
 - One phone camera can't see spin or left/right direction, so carry uses
   typical spin for the club and there is no offline number.
+- A ball can only count as hit if it was locked before the swing. Swing
+  within a second of teeing up and you get a swing-only analysis.
 - Ball tracking needs the ball in frame for at least 2–3 frames after impact
   (240 fps, good light, fast shutter). If it fails, the shot is still saved
   with swing analysis and the reason is shown.
 - The camera only runs while GolfMonitor is open on the iPhone. iOS doesn't let
   a watch bring an app to the foreground. Keep the app open on the tripod
   (the screen stays awake while the camera is live).
+- The watch app has no background runtime. With your wrist down, watchOS
+  can pause it. Haptics, including the ball-lock tap, are only felt while
+  GolfMonitor is on the watch screen. A tap whose news is more than a few
+  seconds old is skipped rather than played late.
+- There is no import of existing videos yet: analysis runs on recordings
+  made in the app.
 - Bundled detector models derive from Ultralytics YOLO (AGPL-3.0), so the app
   must stay open source.

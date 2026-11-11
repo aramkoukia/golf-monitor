@@ -7,7 +7,7 @@ import WatchKit
 /// The watch end of the phone link: sends commands, keeps the latest phone
 /// state, renews the preview lease while the preview is on screen, and plays
 /// a haptic for every phase change so you can feel "recording" / "done"
-/// without looking.
+/// without looking, plus a tap when a newly teed ball locks.
 @MainActor
 final class WatchSessionModel: NSObject, ObservableObject, WCSessionDelegate {
     @Published private(set) var state: RemoteState?
@@ -39,6 +39,7 @@ final class WatchSessionModel: NSObject, ObservableObject, WCSessionDelegate {
     /// An action tapped before WCSession finished activating.
     private var queuedAction: (RemoteCommand, String?)?
     private var leaseTask: Task<Void, Never>?
+    private var lockCue = BallLockCue()
 
     func activate() {
         guard WCSession.isSupported() else {
@@ -146,10 +147,19 @@ final class WatchSessionModel: NSObject, ObservableObject, WCSessionDelegate {
 
     private func apply(_ incoming: RemoteState) {
         guard incoming.supersedes(state) else { return }
+        let previousState = state
         let previous = state?.phase
         state = incoming
         stateReceivedAt = Date()
-        if let previous, previous != incoming.phase { playHaptic(from: previous, to: incoming.phase) }
+        let phaseChanged = previous != nil && previous != incoming.phase
+        if let previous, phaseChanged { playHaptic(from: previous, to: incoming.phase) }
+        if lockCue.shouldTap(previous: previousState, incoming: incoming) {
+            // Let a phase haptic (e.g. "recording") finish first so both are felt.
+            Task { @MainActor in
+                if phaseChanged { try? await Task.sleep(nanoseconds: 700_000_000) }
+                WKInterfaceDevice.current().play(.notification)
+            }
+        }
         if incoming.phase != .ready && incoming.phase != .recording { preview = nil }
     }
 

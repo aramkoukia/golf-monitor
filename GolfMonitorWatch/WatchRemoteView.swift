@@ -195,6 +195,12 @@ private struct StatusPill: View {
                         .monospacedDigit()
                         .contentTransition(.numericText())
                 }
+                if ballLocked {
+                    Image(systemName: "scope")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(WatchPalette.ion)
+                        .accessibilityLabel("Ball locked")
+                }
             } else {
                 Image(systemName: ballLocked ? "scope" : "viewfinder")
                     .font(.system(size: 11, weight: .bold))

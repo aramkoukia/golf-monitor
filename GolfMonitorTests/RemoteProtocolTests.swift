@@ -24,6 +24,7 @@ final class RemoteProtocolTests: XCTestCase {
                                            ballSpeed: 151, clubSpeed: 104, launchAngle: 12.4, smash: nil, tempo: 3.1,
                                            distanceUnit: "YDS", speedUnit: "MPH", practiceSwings: 2, shotsFound: 1,
                                            headline: "231 yds carry", savedToPhotos: true)
+        state.ballLocksSeen = 3
         state.sentAt = Date(timeIntervalSince1970: 1_800_000_000.123)
         let message = RemoteWire.message(state, kind: .state)
         XCTAssertLessThan((message[RemoteWire.payloadKey] as? Data)?.count ?? .max, 1_500)
@@ -102,6 +103,64 @@ final class RemoteProtocolTests: XCTestCase {
         XCTAssertFalse(RemoteScreenModel.make(state: state(.processing), reachable: true).wantsPreview)
         XCTAssertEqual(RemoteScreenModel.make(state: state(.result), reachable: true).primary, .nextShot)
         XCTAssertEqual(RemoteScreenModel.make(state: state(.error), reachable: true).tone, .warning)
+    }
+
+    // MARK: Ball-lock tap
+
+    func testBallLockTapsOncePerNewlyLockedBall() {
+        var cue = BallLockCue()
+        let now = Date()
+        var before = state(.ready) { $0.ballLocksSeen = 0; $0.sentAt = now }
+        var locked = before
+        locked.ballLocked = true
+        locked.ballLocksSeen = 1
+        XCTAssertTrue(cue.shouldTap(previous: before, incoming: locked, now: now))
+
+        // Golfer stands over the ball, then steps away: same ball, no tap.
+        var hidden = locked
+        hidden.ballLocked = false
+        hidden.sentAt = now.addingTimeInterval(5)
+        var back = locked
+        back.sentAt = now.addingTimeInterval(6)
+        XCTAssertFalse(cue.shouldTap(previous: locked, incoming: hidden, now: hidden.sentAt))
+        XCTAssertFalse(cue.shouldTap(previous: hidden, incoming: back, now: back.sentAt))
+
+        // The next teed ball, while recording.
+        before = state(.recording) { $0.ballLocksSeen = 1; $0.sentAt = now.addingTimeInterval(10) }
+        var next = before
+        next.ballLocksSeen = 2
+        XCTAssertTrue(cue.shouldTap(previous: before, incoming: next, now: now.addingTimeInterval(10)))
+    }
+
+    func testBallLockTapIsRateLimitedAndOnlyWhileTheCameraIsLive() {
+        var cue = BallLockCue()
+        let now = Date()
+        func pair(_ phase: RemotePhase, from: Int, to: Int, sent: Date = now) -> (RemoteState, RemoteState) {
+            let a = state(phase) { $0.ballLocksSeen = from; $0.sentAt = sent }
+            var b = a
+            b.ballLocksSeen = to
+            return (a, b)
+        }
+        var (a, b) = pair(.ready, from: 0, to: 2)
+        XCTAssertTrue(cue.shouldTap(previous: a, incoming: b, now: now), "two loose balls lock together: one tap")
+        (a, b) = pair(.ready, from: 2, to: 3)
+        XCTAssertFalse(cue.shouldTap(previous: a, incoming: b, now: now.addingTimeInterval(1)), "within 2 s of the last tap")
+
+        var fresh = BallLockCue()
+        (a, b) = pair(.processing, from: 0, to: 1)
+        XCTAssertFalse(fresh.shouldTap(previous: a, incoming: b, now: now))
+        (a, b) = pair(.result, from: 0, to: 1)
+        XCTAssertFalse(fresh.shouldTap(previous: a, incoming: b, now: now))
+        (a, b) = pair(.ready, from: 0, to: 1, sent: now.addingTimeInterval(-10))
+        XCTAssertFalse(fresh.shouldTap(previous: a, incoming: b, now: now), "stale: arrived when the wrist came up")
+        (a, b) = pair(.ready, from: 0, to: 1)
+        XCTAssertFalse(fresh.shouldTap(previous: nil, incoming: b, now: now), "first state after connecting")
+        var relaunched = b
+        relaunched.epoch = UUID()
+        XCTAssertFalse(fresh.shouldTap(previous: a, incoming: relaunched, now: now), "phone app restarted")
+        a.ballLocksSeen = nil
+        b.ballLocksSeen = nil
+        XCTAssertFalse(fresh.shouldTap(previous: a, incoming: b, now: now), "older phone without the count")
     }
 
     func testFormatting() {

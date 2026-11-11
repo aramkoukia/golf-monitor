@@ -51,7 +51,7 @@ struct RemoteScreenModel: Equatable {
                 title: state.ballLocked ? "Ball locked" : "Ready",
                 detail: state.ballLocked
                     ? "Start, take your practice swings, hit, then stop."
-                    : "Start whenever you like — tee a ball in view.",
+                    : "Tee a ball in view — your wrist taps when it locks.",
                 primary: .start, tone: .plasma, wantsPreview: true, isConnected: true)
         case .recording:
             let detail: String

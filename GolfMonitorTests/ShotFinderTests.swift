@@ -136,6 +136,135 @@ final class ShotFinderTests: XCTestCase {
     }
 }
 
+// MARK: - Rushed routines
+
+/// Recordings that are mostly movement: record pressed on the phone, a walk
+/// to the ball, a swing with no pause, a walk back to press stop. Energies
+/// follow the 240 fps fixtures (a swing is ~0.02–0.04); walking close past
+/// the camera is assumed to be as strong or stronger.
+extension ShotFinderTests {
+    private enum Part {
+        case still(Double)
+        case moving(Double, Float)
+        /// Swing-shaped burst (sine bump), `peak` above the still level.
+        case swing(Double, peak: Float)
+    }
+
+    /// 30 Hz motion, played out part by part, with a little texture so the
+    /// smoothing has real dips and peaks to work on.
+    private func routine(_ parts: [Part]) -> (motion: [MotionSample], duration: Double, swingPeaks: [Double]) {
+        var samples: [MotionSample] = []
+        var peaks: [Double] = []
+        var t = 0.0
+        let dt = 1.0 / 30
+        func emit(_ e: Float) {
+            let texture = 1 + 0.15 * Float(sin(t * 23))
+            samples.append(MotionSample(t: t, energy: 0.002 + e * texture))
+            t += dt
+        }
+        for part in parts {
+            switch part {
+            case .still(let d):
+                for _ in 0..<Int(d * 30) { emit(0) }
+            case .moving(let d, let e):
+                for _ in 0..<Int(d * 30) { emit(e) }
+            case .swing(let d, let peak):
+                peaks.append(t + d / 2)
+                let n = Int(d * 30)
+                for i in 0..<n { emit(peak * Float(sin(Double(i) / Double(n - 1) * .pi))) }
+            }
+        }
+        return (samples, t, peaks)
+    }
+
+    private static let walk: Float = 0.05
+    private static let setUp: Float = 0.01
+
+    func testRushedRoutineOnThePhoneStillFindsTheSwing() {
+        // Nothing still in it at all: the old bar (6 × the whole recording's
+        // spread) rose above the swing and "No swing was found".
+        let r = routine([.moving(1.5, Self.walk), .moving(0.8, Self.setUp), .swing(1.6, peak: 0.035),
+                         .moving(0.4, Self.setUp), .moving(1.5, Self.walk)])
+        let result = finder.analyze(SceneTimeline(duration: r.duration, motion: r.motion), stoppedAtPhone: true)
+        XCTAssertEqual(result.swings.count, 1, "\(result.swings)")
+        let shot = try! XCTUnwrap(result.shots.first)
+        XCTAssertEqual(shot.kind, .swingOnly)
+        XCTAssertEqual(shot.swing?.peakTime ?? 0, r.swingPeaks[0], accuracy: 0.2, "the swing, not a walk")
+        XCTAssertEqual(result.practiceSwingCount, 1, "walking to and from the phone isn't a swing")
+    }
+
+    func testRushedRoutineWithALockedBallFindsTheStrike() {
+        let r = routine([.moving(1.5, Self.walk), .moving(0.8, Self.setUp), .swing(1.6, peak: 0.035),
+                         .moving(0.4, Self.setUp), .moving(1.5, Self.walk)])
+        let impact = r.swingPeaks[0]
+        let timeline = SceneTimeline(duration: r.duration, motion: r.motion,
+                                     balls: [ball(duration: r.duration, absent: [impact...r.duration])])
+        let result = finder.analyze(timeline, stoppedAtPhone: true)
+        XCTAssertEqual(result.struckCount, 1)
+        XCTAssertEqual(result.shots.first?.impactTime ?? 0, impact, accuracy: 0.04)
+        XCTAssertEqual(result.practiceSwingCount, 0)
+    }
+
+    func testMostlyMovingRecordingWithShortPausesFindsTheSwing() {
+        // Less than half of it still: the old bar jumped ~10× here.
+        let r = routine([.moving(1.5, Self.walk), .moving(0.8, Self.setUp), .still(1.0), .swing(1.6, peak: 0.03),
+                         .still(1.0), .moving(1.5, Self.walk)])
+        let result = finder.analyze(SceneTimeline(duration: r.duration, motion: r.motion), stoppedAtPhone: true)
+        XCTAssertEqual(result.swings.count, 1)
+        XCTAssertEqual(result.shots.first?.swing?.peakTime ?? 0, r.swingPeaks[0], accuracy: 0.2)
+    }
+
+    func testPracticeSwingAndShotBetweenWalksAreBothFound() {
+        let r = routine([.moving(1.5, Self.walk), .still(1.0), .swing(1.6, peak: 0.03), .still(1.2),
+                         .swing(1.6, peak: 0.035), .still(1.0), .moving(1.2, Self.walk)])
+        let result = finder.analyze(SceneTimeline(duration: r.duration, motion: r.motion), stoppedAtPhone: true)
+        XCTAssertEqual(result.swings.count, 2, "\(result.swings)")
+        XCTAssertEqual(result.shots.first?.swing?.peakTime ?? 0, r.swingPeaks[1], accuracy: 0.2,
+                       "swing-only falls back to the last real swing, not the walk to the phone")
+    }
+
+    func testWalkingWithoutASwingIsNotASwing() {
+        let r = routine([.moving(1.5, Self.walk), .still(3), .moving(1.5, Self.walk)])
+        let result = finder.analyze(SceneTimeline(duration: r.duration, motion: r.motion), stoppedAtPhone: true)
+        XCTAssertTrue(result.swings.isEmpty)
+        XCTAssertTrue(result.shots.isEmpty, "nothing to analyze → \"No swing was found\"")
+    }
+
+    func testSwingRightBeforeAWatchStopIsKept() {
+        // Stopped from the watch while relaxing out of the finish: the end
+        // of the recording is the golfer, not someone at the phone.
+        let r = routine([.still(2), .swing(1.6, peak: 0.03), .moving(0.5, 0.012)])
+        let timeline = SceneTimeline(duration: r.duration, motion: r.motion)
+        XCTAssertEqual(finder.analyze(timeline, stoppedAtPhone: false).shots.first?.kind, .swingOnly)
+    }
+
+    func testWalkAwayAfterPressingRecordIsNotCountedLive() {
+        let r = routine([.moving(1.5, Self.walk), .still(2), .swing(1.6, peak: 0.03), .still(0.5)])
+        let live = finder.analyze(SceneTimeline(duration: r.duration, motion: r.motion), isFinal: false)
+        XCTAssertEqual(live.swings.count, 1)
+    }
+
+    func testStrikeInMotionTooLongToBeASwingIsStillAShot() {
+        // 6 s of unbroken movement can't be split into a swing, but the ball
+        // left in the middle of it: that's the shot.
+        let r = routine([.still(1), .moving(6, 0.03), .still(1)])
+        let timeline = SceneTimeline(duration: r.duration, motion: r.motion,
+                                     balls: [ball(duration: r.duration, absent: [4.0...r.duration])])
+        let result = finder.analyze(timeline)
+        XCTAssertEqual(result.struckCount, 1)
+        XCTAssertEqual(result.shots.first?.impactTime ?? 0, 4.0, accuracy: 0.04)
+        XCTAssertEqual(result.shots.first?.clipStart ?? 0, 4.0 - finder.config.preRoll, accuracy: 0.04)
+    }
+
+    func testBallTakenAwayWithoutMotionIsNotAShot() {
+        // Exposure jump / lighting change: patch changes, nothing moved.
+        let r = routine([.still(8)])
+        let timeline = SceneTimeline(duration: r.duration, motion: r.motion,
+                                     balls: [ball(duration: r.duration, absent: [4.0...r.duration])])
+        XCTAssertEqual(finder.analyze(timeline).struckCount, 0)
+    }
+}
+
 extension ShotFinderTests {
     func testFirstStrikeInASingleSwingClip() {
         let timeline = SceneTimeline(duration: 2, motion: [], balls: [
