@@ -232,10 +232,19 @@ the Range screen, watch, or video import is remembered.
 - Export every shot as CSV (always in mph and yards).
 
 **Swing Studio**
-- The shot video with the ball path drawn on top.
+- The shot video with the ball path and an optional body-pose skeleton drawn
+  over the moving video.
+- 2D torso lean, knee bend, head movement and hip sway estimates when enough
+  body landmarks are visible. These are image-plane observations, not 3D
+  measurements or coaching diagnoses.
+- Optional moving body-pose skeleton over the video, plus 2D torso lean, knee
+  bend, head movement and hip sway estimates when enough landmarks are visible.
 - Metrics grid.
 - Eight phase chips (Address, Takeaway, Halfway Back, Top, Delivery, Impact,
-  Release, Finish). Tap one to jump to that moment.
+  Release, Finish). Tap one to jump to that estimated moment and see its full
+  name and timestamp. The compact chip labels are app abbreviations; the phase
+  sequence follows the commonly used GolfDB eight-event taxonomy, with
+  intermediate phases estimated between detected events.
 - Tempo, backswing and downswing, rated against tour tempo (~3:1).
 
 **You vs PGA Tour**

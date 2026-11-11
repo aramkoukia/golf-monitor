@@ -129,4 +129,32 @@ final class AnalysisTests: XCTestCase {
         let still = (0..<60).map { PoseSample(t: Double($0) / 30, points: [.leftWrist: (CGPoint(x: 0.5, y: 0.6), 0.9)]) }
         XCTAssertTrue(SwingPhaseDetector.phases(from: still, handedness: .right, impactTime: 1.5).isEmpty)
     }
+
+    func testPoseMetricsMeasure2DPostureAndMovement() throws {
+        let address = PoseSample(t: 0, points: [
+            .nose: (CGPoint(x: 0.50, y: 0.15), 0.9),
+            .leftShoulder: (CGPoint(x: 0.45, y: 0.30), 0.9),
+            .rightShoulder: (CGPoint(x: 0.55, y: 0.30), 0.9),
+            .leftHip: (CGPoint(x: 0.46, y: 0.60), 0.9),
+            .rightHip: (CGPoint(x: 0.54, y: 0.60), 0.9),
+            .leftKnee: (CGPoint(x: 0.43, y: 0.75), 0.9),
+            .rightKnee: (CGPoint(x: 0.57, y: 0.75), 0.9),
+            .leftAnkle: (CGPoint(x: 0.40, y: 0.90), 0.9),
+            .rightAnkle: (CGPoint(x: 0.60, y: 0.90), 0.9),
+        ])
+        let shifted = PoseSample(t: 0.5, points: [
+            .nose: (CGPoint(x: 0.57, y: 0.15), 0.9),
+            .leftShoulder: (CGPoint(x: 0.52, y: 0.30), 0.9),
+            .rightShoulder: (CGPoint(x: 0.62, y: 0.30), 0.9),
+            .leftHip: (CGPoint(x: 0.53, y: 0.60), 0.9),
+            .rightHip: (CGPoint(x: 0.61, y: 0.60), 0.9),
+        ])
+
+        let metrics = PoseMetrics.metrics(from: [address, shifted])
+        XCTAssertEqual(metrics.first { $0.id == "pose.torsoLean2D" }?.value ?? -1, 0, accuracy: 0.1)
+        XCTAssertGreaterThan(try XCTUnwrap(metrics.first { $0.id == "pose.headMovement" }).value, 0)
+        XCTAssertGreaterThan(try XCTUnwrap(metrics.first { $0.id == "pose.hipSway" }).value, 0)
+        XCTAssertGreaterThan(try XCTUnwrap(metrics.first { $0.id == "pose.kneeFlex2D" }).value, 0)
+        XCTAssertTrue(metrics.allSatisfy { $0.rating == .unrated })
+    }
 }

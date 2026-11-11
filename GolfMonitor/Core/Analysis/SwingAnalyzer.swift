@@ -105,6 +105,7 @@ final class SwingAnalyzer {
                                                         impactTime: analysis.impactTime)
             if analysis.impactTime == nil { analysis.impactTime = analysis.marker(.impact)?.t }
             analysis.metrics = SwingPhaseDetector.tempoMetrics(from: analysis.phases)
+                + PoseMetrics.metrics(from: analysis.poses)
             if var m = metrics {
                 m.tempoRatio = analysis.metric("tempo.ratio")?.value ?? 0
                 metrics = m

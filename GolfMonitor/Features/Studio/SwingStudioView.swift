@@ -8,6 +8,10 @@ struct SwingStudioView: View {
     @EnvironmentObject private var store: ShotStore
     @EnvironmentObject private var settings: SettingsStore
     @State private var player: AVPlayer?
+    @State private var selectedPhase: SwingPhase?
+    @State private var playbackTime = 0.0
+    @State private var showPose = true
+    @State private var playbackObserver: Any?
 
     private var shot: Shot? { store.shot(id: route.shotID) }
     private var analysis: SwingAnalysis? { store.analysis(for: route.shotID) }
@@ -41,7 +45,13 @@ struct SwingStudioView: View {
                 }
             }
             .onAppear(perform: loadPlayer)
-            .onDisappear { player?.pause() }
+            .onDisappear {
+                player?.pause()
+                if let playbackObserver, let player {
+                    player.removeTimeObserver(playbackObserver)
+                }
+                playbackObserver = nil
+            }
         }
     }
 
@@ -52,9 +62,39 @@ struct SwingStudioView: View {
                 .frame(height: 300)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
                 .overlay {
-                    if let analysis, !analysis.ballTrack.isEmpty {
-                        TrackOverlay(points: analysis.ballTrack)
-                            .allowsHitTesting(false)
+                    if let analysis {
+                        GeometryReader { geometry in
+                            let mapping = AspectFitMapping(
+                                viewSize: geometry.size,
+                                frameAspect: CGFloat(analysis.frameWidth) / CGFloat(max(analysis.frameHeight, 1))
+                            )
+                            ZStack {
+                                if !analysis.ballTrack.isEmpty {
+                                    TrackOverlay(points: analysis.ballTrack, mapping: mapping)
+                                }
+                                if showPose, let pose = analysis.pose(at: playbackTime),
+                                   abs(pose.t - playbackTime) < 0.15 {
+                                    BodyPoseOverlay(pose: pose, mapping: mapping)
+                                }
+                            }
+                        }
+                        .allowsHitTesting(false)
+                        .overlay(alignment: .topTrailing) {
+                            if !analysis.poses.isEmpty {
+                                Button {
+                                    showPose.toggle()
+                                } label: {
+                                    Label("Pose", systemImage: "figure.stand")
+                                        .font(.caption.bold())
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 7)
+                                        .background(.black.opacity(0.65), in: Capsule())
+                                }
+                                .buttonStyle(.plain)
+                                .padding(10)
+                                .accessibilityLabel(showPose ? "Hide body pose overlay" : "Show body pose overlay")
+                            }
+                        }
                     }
                 }
         } else {
@@ -105,6 +145,7 @@ struct SwingStudioView: View {
                     HStack(spacing: 8) {
                         ForEach(phases) { marker in
                             Button {
+                                selectedPhase = marker.phase
                                 player.seek(to: CMTime(seconds: marker.t, preferredTimescale: 600))
                                 player.play()
                             } label: {
@@ -116,11 +157,26 @@ struct SwingStudioView: View {
                                 }
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 8)
-                                .background(Theme.Palette.graphite, in: Capsule())
+                                .background(selectedPhase == marker.phase ? Theme.Palette.steel : Theme.Palette.graphite,
+                                            in: Capsule())
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel("\(marker.phase.title), \(marker.t, format: .number.precision(.fractionLength(2))) seconds")
+                            .accessibilityHint("Seeks the video to this estimated swing phase")
                         }
                     }
+                }
+                if let selectedPhase, let marker = phases.first(where: { $0.phase == selectedPhase }) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(marker.phase.title)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Theme.Palette.floodlight)
+                        Spacer()
+                        Text("Estimated · \(marker.t, format: .number.precision(.fractionLength(2))) s")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                    .accessibilityElement(children: .combine)
                 }
             } else {
                 Text("Phase markers are not available for this clip.")
@@ -133,7 +189,7 @@ struct SwingStudioView: View {
 
     private var coachingSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Analysis").font(.headline)
+            Text("Swing measurements").font(.headline)
             if let insights = analysis?.insights, !insights.isEmpty {
                 ForEach(insights) { insight in
                     VStack(alignment: .leading, spacing: 3) {
@@ -145,18 +201,27 @@ struct SwingStudioView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
-            } else if let metrics = analysis?.metrics, !metrics.isEmpty {
+            }
+            if let metrics = analysis?.metrics, !metrics.isEmpty {
                 ForEach(metrics) { item in
-                    HStack {
-                        Text(item.name)
-                        Spacer()
-                        Text("\(item.value, specifier: "%.1f") \(item.unit)")
-                            .monospacedDigit()
-                            .foregroundStyle(Theme.color(for: item.rating))
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack {
+                            Text(item.name)
+                            Spacer()
+                            Text("\(item.value, specifier: "%.1f") \(item.unit)")
+                                .monospacedDigit()
+                                .foregroundStyle(Theme.color(for: item.rating))
+                        }
+                        Text(item.explanation)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                     .font(.subheadline)
                 }
-            } else {
+                Text("Pose measurements are 2D estimates from the video, not 3D joint measurements or coaching diagnoses.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if analysis?.insights.isEmpty != false {
                 Text("No coaching observations were generated for this swing.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -199,27 +264,55 @@ struct SwingStudioView: View {
 
     private func loadPlayer() {
         guard player == nil, let url = store.clipURL(for: route.shotID) else { return }
-        player = AVPlayer(url: url)
+        let player = AVPlayer(url: url)
+        self.player = player
+        playbackObserver = player.addPeriodicTimeObserver(
+            forInterval: CMTime(value: 1, timescale: 30), queue: .main
+        ) { time in
+            guard time.seconds.isFinite else { return }
+            playbackTime = time.seconds
+        }
     }
 }
 
 private struct TrackOverlay: View {
     let points: [TrackPoint]
+    let mapping: AspectFitMapping
 
     var body: some View {
-        GeometryReader { geometry in
-            Canvas { context, size in
-                guard points.count > 1 else { return }
-                var path = Path()
-                for (index, point) in points.enumerated() {
-                    let position = CGPoint(x: CGFloat(point.x) * size.width,
-                                           y: CGFloat(point.y) * size.height)
-                    if index == 0 { path.move(to: position) } else { path.addLine(to: position) }
-                }
-                context.stroke(path, with: .color(Theme.Palette.tracerCore),
-                               style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+        Canvas { context, _ in
+            guard points.count > 1 else { return }
+            var path = Path()
+            for (index, point) in points.enumerated() {
+                let position = mapping.point(CGPoint(x: CGFloat(point.x), y: CGFloat(point.y)))
+                if index == 0 { path.move(to: position) } else { path.addLine(to: position) }
             }
-            .frame(width: geometry.size.width, height: geometry.size.height)
+            context.stroke(path, with: .color(Theme.Palette.tracerCore),
+                           style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+        }
+    }
+}
+
+private struct BodyPoseOverlay: View {
+    let pose: PoseSample
+    let mapping: AspectFitMapping
+
+    var body: some View {
+        Canvas { context, _ in
+            for (first, second) in BodyJoint.bones {
+                guard let a = pose.point(first), let b = pose.point(second) else { continue }
+                var path = Path()
+                path.move(to: mapping.point(a))
+                path.addLine(to: mapping.point(b))
+                context.stroke(path, with: .color(Theme.Palette.ion),
+                               style: StrokeStyle(lineWidth: 3, lineCap: .round))
+            }
+            for joint in BodyJoint.allCases {
+                guard let point = pose.point(joint) else { continue }
+                let center = mapping.point(point)
+                let dot = Path(ellipseIn: CGRect(x: center.x - 3.5, y: center.y - 3.5, width: 7, height: 7))
+                context.fill(dot, with: .color(.white))
+            }
         }
     }
 }
