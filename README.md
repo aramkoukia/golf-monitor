@@ -237,6 +237,8 @@ the Range screen, watch, or video import is remembered.
 - 2D torso lean, knee bend, head movement and hip sway estimates when enough
   body landmarks are visible. These are image-plane observations, not 3D
   measurements or coaching diagnoses.
+- "What to review" suggestions explain how to inspect those observations in
+  the video; they do not label a pose good or bad.
 - Metrics grid.
 - Eight phase chips (Address, Takeaway, Halfway Back, Top, Delivery, Impact,
   Release, Finish). Tap one to jump to that estimated moment and see its full

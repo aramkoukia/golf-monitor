@@ -189,7 +189,7 @@ struct SwingStudioView: View {
 
     private var coachingSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Swing measurements").font(.headline)
+            Text("What to review").font(.headline)
             if let insights = analysis?.insights, !insights.isEmpty {
                 ForEach(insights) { insight in
                     VStack(alignment: .leading, spacing: 3) {
@@ -202,7 +202,39 @@ struct SwingStudioView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
+            let tips = PoseMetrics.tips(from: analysis?.metrics ?? [])
+            if !tips.isEmpty {
+                ForEach(tips) { tip in
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack(spacing: 7) {
+                            Image(systemName: "eye")
+                                .foregroundStyle(Theme.Palette.ion)
+                            Text(tip.title).font(.subheadline.weight(.semibold))
+                            Spacer(minLength: 0)
+                            Text(tip.observation)
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+                        Text(tip.suggestion)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                Text("These are points to review, not good/bad judgments. Pose values are 2D estimates and may be affected by camera angle, framing, or hidden joints.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if analysis?.poses.isEmpty == false {
+                Text("Body pose was detected, but not enough landmarks were visible together to suggest posture points to review.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("No body pose was detected clearly enough to suggest posture points to review.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
             if let metrics = analysis?.metrics, !metrics.isEmpty {
+                Text("Measurements").font(.subheadline.weight(.semibold))
                 ForEach(metrics) { item in
                     VStack(alignment: .leading, spacing: 3) {
                         HStack {
@@ -218,10 +250,7 @@ struct SwingStudioView: View {
                     }
                     .font(.subheadline)
                 }
-                Text("Pose measurements are 2D estimates from the video, not 3D joint measurements or coaching diagnoses.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else if analysis?.insights.isEmpty != false {
+            } else if analysis?.insights.isEmpty != false, analysis?.metrics.isEmpty != false {
                 Text("No coaching observations were generated for this swing.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)

@@ -156,5 +156,10 @@ final class AnalysisTests: XCTestCase {
         XCTAssertGreaterThan(try XCTUnwrap(metrics.first { $0.id == "pose.hipSway" }).value, 0)
         XCTAssertGreaterThan(try XCTUnwrap(metrics.first { $0.id == "pose.kneeFlex2D" }).value, 0)
         XCTAssertTrue(metrics.allSatisfy { $0.rating == .unrated })
+
+        let tips = PoseMetrics.tips(from: metrics)
+        XCTAssertEqual(tips.count, 4)
+        XCTAssertTrue(tips.contains { $0.id == "pose.headMovement" && $0.suggestion.contains("Compare") })
+        XCTAssertTrue(tips.contains { $0.id == "pose.hipSway" && $0.suggestion.contains("weight transfer") })
     }
 }
