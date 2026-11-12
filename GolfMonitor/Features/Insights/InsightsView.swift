@@ -8,6 +8,9 @@ struct InsightsView: View {
 
     private var measuredShots: [Shot] { store.shots.filter(\.hasLaunchData) }
     private var chartShots: [Shot] { Array(measuredShots.prefix(20).reversed()) }
+    private var tempoRatios: [Double] {
+        store.shots.map(\.tempoRatio).filter { $0.isFinite && $0 > 0 }
+    }
 
     var body: some View {
         NavigationStack {
@@ -15,7 +18,7 @@ struct InsightsView: View {
                 NightRangeBackground()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
-                        if measuredShots.isEmpty {
+                        if measuredShots.isEmpty && tempoRatios.isEmpty {
                             ContentUnavailableView {
                                 Label("Insights appear after your first measured shot", systemImage: "chart.xyaxis.line")
                             } description: {
@@ -26,9 +29,16 @@ struct InsightsView: View {
                             }
                             .padding(.top, 72)
                         } else {
-                            summaryCards
-                            carryTrend
-                            clubSummary
+                            if !measuredShots.isEmpty {
+                                summaryCards
+                            }
+                            if !tempoRatios.isEmpty {
+                                tempoTrend
+                            }
+                            if !measuredShots.isEmpty {
+                                carryTrend
+                                clubSummary
+                            }
                         }
                     }
                     .padding()
@@ -36,6 +46,39 @@ struct InsightsView: View {
             }
             .navigationTitle("Insights")
         }
+    }
+
+    private var tempoTrend: some View {
+        let bins = TempoTrend.histogram(tempoRatios)
+        let onTargetPercentage = TempoTrend.onTargetPercentage(tempoRatios) ?? 0
+        let onTargetCount = bins.first(where: \.isTarget)?.count ?? 0
+
+        return VStack(alignment: .leading, spacing: 12) {
+            Text("Tempo trends").font(.headline)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(onTargetPercentage, format: .percent.precision(.fractionLength(0)))
+                    .font(.title2.bold().monospacedDigit())
+                    .foregroundStyle(Theme.Palette.ion)
+                Text("in the 2.7–3.3:1 target band")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            Text("\(onTargetCount) of \(tempoRatios.count) swings · tempo is estimated from detected swing phases")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Chart(bins) { bin in
+                BarMark(
+                    x: .value("Tempo ratio", bin.label),
+                    y: .value("Swings", bin.count)
+                )
+                .foregroundStyle(bin.isTarget ? Theme.Palette.ion : Theme.Palette.plasma.opacity(0.7))
+            }
+            .chartYAxisLabel("Swings")
+            .frame(height: 180)
+            .accessibilityLabel("Histogram of swing tempo ratios")
+            .accessibilityValue("\(onTargetCount) of \(tempoRatios.count) swings are in the target band")
+        }
+        .insightPanel()
     }
 
     private var summaryCards: some View {
@@ -103,6 +146,48 @@ struct InsightsView: View {
         .frame(maxWidth: .infinity, minHeight: 92, alignment: .leading)
         .padding()
         .insightPanel()
+    }
+}
+
+struct TempoHistogramBin: Identifiable {
+    let label: String
+    let count: Int
+    let isTarget: Bool
+
+    var id: String { label }
+}
+
+enum TempoTrend {
+    static func histogram(_ ratios: [Double]) -> [TempoHistogramBin] {
+        let labels = ["<2.2", "2.2–<2.7", "2.7–3.3", ">3.3–3.9", ">3.9"]
+        var counts = Array(repeating: 0, count: labels.count)
+
+        for ratio in ratios where ratio.isFinite && ratio > 0 {
+            let index: Int
+            if ratio < 2.2 {
+                index = 0
+            } else if ratio < 2.7 {
+                index = 1
+            } else if ratio <= 3.3 {
+                index = 2
+            } else if ratio <= 3.9 {
+                index = 3
+            } else {
+                index = 4
+            }
+            counts[index] += 1
+        }
+
+        return labels.enumerated().map { index, label in
+            TempoHistogramBin(label: label, count: counts[index], isTarget: index == 2)
+        }
+    }
+
+    static func onTargetPercentage(_ ratios: [Double]) -> Double? {
+        let validRatios = ratios.filter { $0.isFinite && $0 > 0 }
+        guard !validRatios.isEmpty else { return nil }
+        let inTarget = validRatios.filter { (2.7...3.3).contains($0) }.count
+        return Double(inTarget) / Double(validRatios.count)
     }
 }
 

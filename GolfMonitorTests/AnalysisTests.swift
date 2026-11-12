@@ -191,4 +191,14 @@ final class AnalysisTests: XCTestCase {
         let savedTempoSummary = SwingFeedback.summary(metrics: [], poseCount: 0, tempoRatio: 3)
         XCTAssertEqual(savedTempoSummary.positiveRating, .tour)
     }
+
+    func testTempoTrendHistogramAndTargetPercentage() throws {
+        let ratios = [1.9, 2.2, 2.69, 2.7, 3.0, 3.3, 3.31, 3.9, 4.1, 0, .nan, .infinity]
+        let bins = TempoTrend.histogram(ratios)
+
+        XCTAssertEqual(bins.map(\.count), [1, 2, 3, 2, 1])
+        XCTAssertEqual(bins.filter(\.isTarget).map(\.label), ["2.7–3.3"])
+        XCTAssertEqual(try XCTUnwrap(TempoTrend.onTargetPercentage(ratios)), 3.0 / 9.0, accuracy: 0.0001)
+        XCTAssertNil(TempoTrend.onTargetPercentage([0, .nan, .infinity]))
+    }
 }

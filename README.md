@@ -258,6 +258,8 @@ the Range screen, watch, or video import is remembered.
 - Measured shots, average carry, average ball speed and best carry.
 - A carry trend chart of the last 20 measured shots.
 - Average carry by club.
+- Tempo-ratio histogram and percentage of tracked swings in the 2.7–3.3:1
+  target band. Tempo is estimated from detected swing phases.
 
 **Practice**
 - **Carry Challenge:** five shots aimed at 150 yds; each measured shot that
@@ -540,8 +542,10 @@ can trust.
 
 **1.8 Tempo trends** (S)
 
-- Tempo ratio histogram, % of swings in your target band (3:1 default), and an
-  audio metronome tempo trainer.
+- Shipped in Insights: tempo-ratio histogram and percentage of tracked swings
+  in the 2.7–3.3:1 target band. Values are estimated from detected swing
+  phases.
+- Remaining: user-adjustable target band and an audio metronome tempo trainer.
 
 **1.9 Apple Health golf workouts** (S)
 
