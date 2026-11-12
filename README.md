@@ -398,6 +398,91 @@ a plain fade.
 routine, and privacy, with handedness and the Save-to-Photos choice. After
 that the app asks for camera access.
 
+## Accounts, community and payments roadmap
+
+The app is currently local-first: recording and analysis stay on the iPhone,
+and no account or network connection is required. Add online features as an
+optional layer, so a backend outage never blocks range capture or local swing
+review. Start by syncing small, user-approved statistics; do not upload swing
+videos by default.
+
+### Backend options
+
+| Option | Why it could fit | Free-tier trade-offs |
+|---|---|---|
+| **Supabase (recommended starting point)** | Managed Postgres, Auth and Row Level Security (RLS) make users, friends, groups, memberships and ranked statistics natural relational data. Its SQL database is a good fit for filtered and paginated leaderboards. | The published Free tier includes 50,000 monthly active users, 500 MB database, 1 GB file storage and 5 GB egress, with at most two active projects. Free projects pause after one week of inactivity. It is suitable for a small pilot, not a production availability promise; monitor quotas and recheck pricing before launch. |
+| **Firebase (strong alternative)** | Firebase Auth and Firestore have mature Apple-platform SDKs and real-time updates; choose it if rapid live updates and the Google ecosystem are more important than SQL queries. | Spark has no-cost quotas including 50,000 non-phone auth MAUs, 1 GiB Firestore storage, 50,000 document reads/day, 20,000 writes/day and 10 GiB/month egress. Cloud Functions are not available on Spark, so trusted server-side leaderboard and purchase logic means moving to Blaze and enabling billing. Model group queries and read volume carefully. |
+
+For GolfMonitor, start with **one Supabase Free project** and store only account
+profiles, consented shot summaries and group/leaderboard data. Keep videos and
+full-resolution analysis local unless a later, separately designed feature
+justifies the storage, bandwidth, privacy and moderation costs. Put authorization
+in database policies (RLS), never in client-side UI checks alone. Treat all
+free-tier quotas and prices as changeable; add usage alerts and a migration/
+backup plan before relying on hosted data.
+
+### Phased features
+
+1. **Optional accounts and sync**
+   - Let people continue as local-only users. Offer account creation and sign-in
+     (for example, Sign in with Apple and email), and explain what will sync.
+   - Link an existing local profile to an account without duplicating or losing
+     shots. Sync only selected fields such as date, club, camera view and
+     measured/estimated results; keep media on-device by default.
+   - Add account deletion, data export, sign-out, conflict handling and clear
+     privacy controls before launch. Enforce per-user access with server-side
+     authorization / RLS.
+
+2. **Sharing and private groups**
+   - Let users explicitly share a swing summary or selected statistics; make
+     every shared item revocable and private by default.
+   - Add invite-only friend groups and leaderboards with clear time ranges,
+     club filters, tie rules and measurement provenance.
+   - Offer a local/regional board based on a user-selected region (or a
+     coarse, optional location permission), not continuous or precise location
+     tracking. Include block/report controls and a way to leave or delete a
+     group.
+
+3. **Global leaderboards**
+   - Add opt-in global boards after the private-group model is stable.
+   - Compute ranking inputs on a trusted backend, rate-limit submissions and
+     detect obvious duplicates or impossible values. Label modeled estimates
+     separately from measured values; do not imply that different capture
+     setups are directly comparable.
+   - Define moderation, abuse reporting, privacy, retention and age-appropriate
+     policies before making profiles or scores publicly discoverable.
+
+4. **Paid features: subscription and pay-per-use**
+   - First decide which features, if any, justify charging. Keep local recording
+     and basic analysis usable without a subscription.
+   - For digital features sold in the iOS app, plan around StoreKit
+     In-App Purchase (auto-renewable subscriptions and/or consumable credits),
+     subject to current App Store rules and regional exceptions. Do not treat
+     Stripe as a drop-in replacement for iOS digital-content purchases.
+   - RevenueCat is an optional service for purchase status, entitlement
+     management and subscription reporting; it does not remove Apple's
+     checkout or App Store requirements. Its current published plan is free
+     through $2,500 monthly tracked revenue, then 1% of tracked revenue.
+   - Verify purchases and credit balances on a trusted backend, make credit
+     spending idempotent, support restore purchases and refunds, and never
+     grant paid access based only on a client-side flag.
+
+### Pricing and policy references
+
+Free-tier figures below were checked in November 2026 and can change. Review
+the provider's current limits, billing requirements, data region, backup,
+security and terms before selecting a production plan.
+
+- [Supabase pricing](https://supabase.com/pricing) ·
+  [Supabase Auth](https://supabase.com/docs/guides/auth) ·
+  [Postgres Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security)
+- [Firebase pricing](https://firebase.google.com/pricing) ·
+  [Firebase Authentication for Apple platforms](https://firebase.google.com/docs/auth/ios/start)
+- [Apple In-App Purchase](https://developer.apple.com/in-app-purchase/) ·
+  [App Store Review Guidelines](https://developer.apple.com/app-store/review/guidelines/)
+- [RevenueCat pricing](https://www.revenuecat.com/pricing/) ·
+  [RevenueCat iOS SDK setup](https://www.revenuecat.com/docs/getting-started/installation/ios)
+
 ## How it works
 
 ```
