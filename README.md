@@ -398,90 +398,325 @@ a plain fade.
 routine, and privacy, with handedness and the Save-to-Photos choice. After
 that the app asks for camera access.
 
-## Accounts, community and payments roadmap
+## GolfMonitor Roadmap
 
-The app is currently local-first: recording and analysis stay on the iPhone,
-and no account or network connection is required. Add online features as an
-optional layer, so a backend outage never blocks range capture or local swing
-review. Start by syncing small, user-approved statistics; do not upload swing
-videos by default.
+*Last updated: 2026-11-11. Replaces the "Ideas for v2" list in the README.*
 
-### Backend options
+### North star
 
-| Option | Why it could fit | Free-tier trade-offs |
+After every range session, a golfer should be able to answer three questions:
+
+1. **What did I actually do today?** (honest numbers, with confidence)
+2. **Is it better than before, and is that change real or just noise?**
+3. **What should I work on next?**
+
+GolfMonitor is not trying to be a TrackMan. Several phone-only apps already
+estimate ball speed, launch and carry. Our edge is the **honest progress loop**:
+a launch monitor that tells you what it can and can't measure, then turns those
+measurements into trends, goals and practice guidance.
+
+### Principles
+
+1. **Honest numbers.** Every metric is labeled measured, estimated or n/a, and
+   every shot carries a confidence score.
+2. **Trends beat absolutes.** Ball speed is good to roughly ±2–3 mph. Same
+   phone, same setup, same player means *relative* change is trustworthy even
+   when absolute values are not. Design the product around that.
+3. **iPhone first.** Apple Watch and AirPods are optional extra sensors. No new
+   hardware required.
+4. **On-device and private by default.** Cloud sync is optional.
+5. **Ship the progress loop before exotic sensing.** Insight features need data
+   we already collect.
+
+### What the phone measures well vs. poorly
+
+| Reliable enough to trend | Useful with caveats | Do not promise |
 |---|---|---|
-| **Supabase (recommended starting point)** | Managed Postgres, Auth and Row Level Security (RLS) make users, friends, groups, memberships and ranked statistics natural relational data. Its SQL database is a good fit for filtered and paginated leaderboards. | The published Free tier includes 50,000 monthly active users, 500 MB database, 1 GB file storage and 5 GB egress, with at most two active projects. Free projects pause after one week of inactivity. It is suitable for a small pilot, not a production availability promise; monitor quotas and recheck pricing before launch. |
-| **Firebase (strong alternative)** | Firebase Auth and Firestore have mature Apple-platform SDKs and real-time updates; choose it if rapid live updates and the Google ecosystem are more important than SQL queries. | Spark has no-cost quotas including 50,000 non-phone auth MAUs, 1 GiB Firestore storage, 50,000 document reads/day, 20,000 writes/day and 10 GiB/month egress. Cloud Functions are not available on Spark, so trusted server-side leaderboard and purchase logic means moving to Blaze and enabling billing. Model group queries and read volume carefully. |
+| Ball speed, launch angle, tempo, smash factor trend | Club speed (noisy), carry (model estimate), offline (rough shape) | Spin, face angle, true club path, true azimuth (from side view) |
 
-For GolfMonitor, start with **one Supabase Free project** and store only account
-profiles, consented shot summaries and group/leaderboard data. Keep videos and
-full-resolution analysis local unless a later, separately designed feature
-justifies the storage, bandwidth, privacy and moderation costs. Put authorization
-in database policies (RLS), never in client-side UI checks alone. Treat all
-free-tier quotas and prices as changeable; add usage alerts and a migration/
-backup plan before relying on hosted data.
+---
 
-### Phased features
+### Phase 0: Trust and foundations (~3–4 weeks)
 
-1. **Optional accounts and sync**
-   - Let people continue as local-only users. Offer account creation and sign-in
-     (for example, Sign in with Apple and email), and explain what will sync.
-   - Link an existing local profile to an account without duplicating or losing
-     shots. Sync only selected fields such as date, club, camera view and
-     measured/estimated results; keep media on-device by default.
-   - Add account deletion, data export, sign-out, conflict handling and clear
-     privacy controls before launch. Enforce per-user access with server-side
-     authorization / RLS.
+Nothing in later phases is credible without durable data and numbers people
+can trust.
 
-2. **Sharing and private groups**
-   - Let users explicitly share a swing summary or selected statistics; make
-     every shared item revocable and private by default.
-   - Add invite-only friend groups and leaderboards with clear time ranges,
-     club filters, tie rules and measurement provenance.
-   - Offer a local/regional board based on a user-selected region (or a
-     coarse, optional location permission), not continuous or precise location
-     tracking. Include block/report controls and a way to leave or delete a
-     group.
+**0.1 Durable data layer** (Effort: M)
 
-3. **Global leaderboards**
-   - Add opt-in global boards after the private-group model is stable.
-   - Compute ranking inputs on a trusted backend, rate-limit submissions and
-     detect obvious duplicates or impossible values. Label modeled estimates
-     separately from measured values; do not imply that different capture
-     setups are directly comparable.
-   - Define moderation, abuse reporting, privacy, retention and age-appropriate
-     policies before making profiles or scores publicly discoverable.
+- Move history from local JSON to SwiftData (fits the iOS 17 minimum) with a
+  versioned schema and a one-time migration. Entities: Session, Shot, Club,
+  Equipment, Goal, Note.
+- Optional iCloud sync via CloudKit; JSON/CSV export and import stay.
+- Done when: an app update never loses shots, and export then import
+  round-trips exactly.
 
-4. **Paid features: subscription and pay-per-use**
-   - First decide which features, if any, justify charging. Keep local recording
-     and basic analysis usable without a subscription.
-   - For digital features sold in the iOS app, plan around StoreKit
-     In-App Purchase (auto-renewable subscriptions and/or consumable credits),
-     subject to current App Store rules and regional exceptions. Do not treat
-     Stripe as a drop-in replacement for iOS digital-content purchases.
-   - RevenueCat is an optional service for purchase status, entitlement
-     management and subscription reporting; it does not remove Apple's
-     checkout or App Store requirements. Its current published plan is free
-     through $2,500 monthly tracked revenue, then 1% of tracked revenue.
-   - Verify purchases and credit balances on a trusted backend, make credit
-     spending idempotent, support restore purchases and refunds, and never
-     grant paid access based only on a client-side flag.
+**0.2 Shot confidence and quality gates** (S–M)
 
-### Pricing and policy references
+- Compute a per-shot confidence from tracking residuals, frame count, blob-size
+  consistency and smash-factor sanity bounds.
+- Low-confidence shots are flagged with a reason and excluded from averages
+  and trends by default (user can include them).
+- Done when: a smash factor of 1.9 never reaches a trend chart silently.
 
-Free-tier figures below were checked in November 2026 and can change. Review
-the provider's current limits, billing requirements, data region, backup,
-security and terms before selecting a production plan.
+**0.3 Audio-triggered capture** (M)
 
-- [Supabase pricing](https://supabase.com/pricing) ·
-  [Supabase Auth](https://supabase.com/docs/guides/auth) ·
-  [Postgres Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security)
-- [Firebase pricing](https://firebase.google.com/pricing) ·
-  [Firebase Authentication for Apple platforms](https://firebase.google.com/docs/auth/ios/start)
-- [Apple In-App Purchase](https://developer.apple.com/in-app-purchase/) ·
-  [App Store Review Guidelines](https://developer.apple.com/app-store/review/guidelines/)
-- [RevenueCat pricing](https://www.revenuecat.com/pricing/) ·
-  [RevenueCat iOS SDK setup](https://www.revenuecat.com/docs/getting-started/installation/ios)
+- Detect the impact sound with AVAudioEngine and keep a rolling 2 s buffer so
+  the swing is already captured. Hands-free, far less storage, enables real
+  multi-shot sessions.
+- Done when: a 20-shot session needs zero taps after "Start".
+
+**0.4 Setup assistant and bump detection** (S–M)
+
+- Level and pitch check with CoreMotion, live ball-size/distance gauge against
+  the 0.5–2.0 m window, and a warning when the phone moves after calibration
+  (accelerometer spike).
+- Optional: on LiDAR iPhones, use ARKit depth to confirm distance to the ball.
+- Done when: a moved tripod is caught before it corrupts a session.
+
+**0.5 Golden-clip regression suite and validation harness** (M)
+
+- Keep a library of recorded clips with reference values (from a radar or
+  camera launch monitor, or a friend's unit) and run them in GolfMonitorTests
+  on every change. Dev-only accuracy dashboard (error vs reference per metric).
+- Done when: no tracker or model change ships without a before/after accuracy
+  report.
+
+**0.6 Repo and model hygiene** (S)
+
+- Move `.pt` / `.mlpackage` binaries to Git LFS or release assets, remove
+  `.DS_Store`, document what each bundled model (detector, seg, pose) is used
+  for or remove the unused ones.
+- Add in-app attribution for the Roboflow GolfBall dataset (CC BY 4.0).
+
+---
+
+### Phase 1: Progress engine (~6–8 weeks) — the core value
+
+**1.1 Session report card** (M)
+
+- After each session: best shot, averages, consistency, and **three
+  plain-English insights** (for example "7-iron ball speed was steady within
+  ±2 mph, but launch dropped 3° in the last 10 shots"), plus change vs your
+  last five sessions.
+- Rule-based first. Swift Charts for visuals.
+
+**1.2 Progress dashboard with noise-aware trends** (M)
+
+- Per club, per metric: rolling median with a variation band, personal bests,
+  date filters.
+- A **"real change?" indicator**: only call something an improvement when the
+  shift exceeds measurement noise plus your normal shot-to-shot variation;
+  otherwise show "no clear change yet".
+
+**1.3 Consistency metrics and a Repeatability Score** (S–M)
+
+- Standard deviation of ball speed, launch angle and tempo per club, combined
+  into a transparent 0–100 Repeatability Score. This is the honest stand-in
+  for dispersion, since a side view can't see true left/right.
+
+**1.4 Warm-up and fatigue curve** (S)
+
+- Plot each metric against shot number within a session; detect when quality
+  drops and suggest an ideal session length. Uses data we already have, and no
+  competitor listing I found does this.
+
+**1.5 Club gapping ladder and yardage card** (M)
+
+- Ball-speed gaps between clubs (reliable) alongside carry estimates (flagged
+  as estimates). Highlight overlaps and big gaps. Export as an image/PDF;
+  later a widget and Watch complication.
+
+**1.6 Goals and streaks** (S–M)
+
+- User-set targets (driver ball speed, tempo band, smash factor, repeatability)
+  with progress rings and a weekly practice streak. Only metric-backed
+  milestones; no meaningless badges.
+
+**1.7 Notes, tags and Experiments** (M)
+
+- Tag sessions or shots with a swing thought, drill, new club or new ball.
+  **Experiments** compare before vs after (or ball A vs ball B) using the same
+  noise-aware logic as 1.2.
+
+**1.8 Tempo trends** (S)
+
+- Tempo ratio histogram, % of swings in your target band (3:1 default), and an
+  audio metronome tempo trainer.
+
+**1.9 Apple Health golf workouts** (S)
+
+- Write each session as a golf workout via HealthKit for streaks and activity
+  history.
+
+---
+
+### Phase 2: Better measurement (~8–12 weeks)
+
+**2.1 Core ML ball tracking across frames** (L)
+
+- Use the detector through the whole clip (existing v2 item). Retrain on GPU
+  using images captured by the app at 0.5–2 m. Add a local "hard cases" folder
+  to collect failures for labeling.
+- Done when: tracking success rate and ball-speed error beat the blob tracker
+  on the golden-clip suite.
+
+**2.2 Clubhead tracking improvements** (M–L)
+
+- Improve pre-impact clubhead tracking; evaluate an optional reflective marker
+  on the clubhead. Cross-check against Apple Watch hand speed once Phase 3
+  lands.
+
+**2.3 Environment-aware flight model** (M)
+
+- Add wind, temperature, altitude and ball type to the carry model (manual
+  entry plus WeatherKit where available). Show carry as a **range**, not a
+  single number.
+
+**2.4 Personal calibration of estimates** (M)
+
+- Let the user enter one known real carry (range markers or a friend's launch
+  monitor) to tune the per-club spin assumption, so carry estimates improve
+  for *their* swing.
+
+**2.5 Wedge matrix** (S–M)
+
+- Ball speed and estimated carry for partial swings (for example 50/75/100%)
+  to build a wedge distance ladder. Highly useful and well within what the
+  camera measures.
+
+**2.6 Down-the-line mode** (L)
+
+- Scope it as a **directional tendency** (launch direction and a clubhead-path
+  trend), not precise path or face numbers. Ship as alternating sets (10 shots
+  side-on, then 10 down-the-line) before attempting multi-device capture.
+
+---
+
+### Phase 3: Swing view (~8–10 weeks)
+
+**3.1 Pose overlay and automatic key positions** (M–L)
+
+- Detect address, takeaway, top, impact and finish using Apple's Vision body
+  pose (benchmark against the YOLOv8-pose model already in the repo).
+  Frame-by-frame scrubbing at key positions.
+
+**3.2 Compare to past self** (M)
+
+- Side-by-side or ghost overlay of today's swing vs your best swing or last
+  session, synced at key positions, with the shot tracer drawn on video.
+
+**3.3 Posture and motion trends** (L)
+
+- From side view: spine-angle change, head drift, hip depth toward the ball
+  (early-extension proxy), knee flex change. From face-on: sway/slide and
+  shoulder tilt at the top.
+- Always shown as **trend vs your own baseline** and labeled by camera angle,
+  never as absolute degrees. Vision's 3D body pose (17 joints, iOS 17+) is an
+  experimental option for rotation.
+
+**3.4 Apple Watch as a sensor** (M–L)
+
+- Use watchOS high-frequency motion data for tempo, backswing and downswing
+  time, and hand speed. Show the last shot and tempo on the wrist with a
+  haptic cue. Works without the tripod (warm-up swings, no-ball practice) and
+  cross-checks camera tempo.
+
+**3.5 Speed training mode** (M)
+
+- Non-impact swing-speed sessions using Watch hand speed (and camera club
+  speed when visible), logging overspeed sets and charting speed over weeks.
+
+---
+
+### Phase 4: Practice system (~8 weeks)
+
+**4.1 Combines and skills tests** (M)
+
+- Repeatable scored tests built only from metrics the phone measures: Speed
+  Ladder (10 swings), Launch Window (hit a launch/ball-speed window 8 of 10),
+  Tempo 10, Wedge Control (three ball-speed targets). Scores, history,
+  personal bests.
+
+**4.2 Live corridor drills** (M)
+
+- Set a min–max for launch angle, ball speed or tempo and get instant green/red
+  feedback with an audio cue. Track hit-rate per session.
+
+**4.3 Auto-generated practice plans** (M)
+
+- Pick the weakest or most inconsistent metric over recent sessions, propose
+  a 20–30 minute plan with a target, track adherence, and send a weekly review.
+
+**4.4 Sharing and coach mode** (M)
+
+- PDF/image session report, share video with tracer overlay, CSV/JSON export;
+  later read-only sharing for a coach via CloudKit.
+
+**4.5 On-course glue** (M)
+
+- Yardage-card widget and Watch complication from your measured distances.
+  Optional 30-second "round lite" log (score, fairways, greens, putts) to show
+  whether practice trends line up with scoring.
+
+**4.6 Siri, Shortcuts and Action Button** (S)
+
+- App Intents to start/stop a session by voice or the Action Button.
+
+---
+
+### Phase 5: Moonshots (validate before committing)
+
+- **On-device AI coach** using Apple's Foundation Models on supported devices:
+  plain-English summaries and Q&A over local data, with a deterministic
+  fallback for other devices.
+- **Head stability for putting and chipping** via AirPods motion
+  (CMHeadphoneMotionManager), plus a camera putting module (ball speed and
+  line).
+- **Marker-based club delivery** (face angle, impact location): at least one
+  competing app claims this with a reflective marker; validate accuracy on our
+  golden-clip suite before building anything.
+- **Opt-in anonymous community benchmarks** by handicap band.
+- **Two-device simultaneous multi-angle capture** (heavy clock-sync problem;
+  one competitor shows paired iPhone + iPad capture).
+
+### Parked or dropped
+
+- **Spin from a marked ball** (previous v2 idea): iPhone slow motion tops out
+  around 240 fps and the README itself says 1000+ fps is needed. Revisit only
+  if hardware or APIs change.
+- **True azimuth, face angle and club path from side view only**: not
+  observable.
+- **Absolute carry accuracy claims**: stay as a ±10–15% estimate until
+  personal calibration (2.4) proves otherwise.
+
+### Suggested success metrics
+
+- Shot tracking success rate on the golden-clip suite (target ≥ 90% of clean
+  clips).
+- Ball-speed error vs reference (target: median within ±3 mph).
+- Time from opening the app to first captured shot (< 2 minutes).
+- Share of sessions where the report card is opened; share of users with an
+  active goal.
+- 4-week retention of users who complete 3+ sessions.
+
+### Risks and notes
+
+- CloudKit, WeatherKit and Watch distribution likely need a paid Apple
+  Developer account (the README's free-account flow expires every 7 days).
+  Verify before committing to 0.1 sync and 2.3 weather.
+- Rolling shutter, motion blur and bad framing cap accuracy; the confidence
+  gates (0.2) and setup assistant (0.4) are the mitigation.
+- Video lives in Photos and shot data stays on-device by default; keep it that
+  way and state it plainly in the App Store privacy details.
+
+### If you only do five things
+
+1. Durable data layer (0.1)
+2. Confidence gates (0.2) and audio-triggered capture (0.3)
+3. Session report card (1.1) and noise-aware progress dashboard (1.2)
+4. Consistency score (1.3) and goals (1.6)
+5. Golden-clip regression suite (0.5), so every later accuracy improvement can
+   be proven
 
 ## How it works
 
