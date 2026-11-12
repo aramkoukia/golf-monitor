@@ -282,6 +282,7 @@ private struct ShotRow: View {
                 .font(.caption.bold())
                 .foregroundStyle(Theme.Palette.dim)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)
         .contentCard(cornerRadius: Theme.Radius.m)
         .accessibilityElement(children: .combine)
@@ -320,12 +321,18 @@ private struct ShotThumbnail: View {
         ZStack {
             Theme.Palette.graphite
             if let image {
-                Image(uiImage: image).resizable().scaledToFill()
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 58, height: 76)
+                    .clipped()
             } else {
                 Image(systemName: shot.hasMedia ? "film" : "chart.bar.fill")
                     .foregroundStyle(Theme.Palette.dim)
             }
         }
+        .frame(width: 58, height: 76)
+        .clipped()
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .task(id: shot.id) {
             guard shot.hasMedia, let url = store.thumbnailURL(for: shot.id) else { return }
