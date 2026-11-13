@@ -225,6 +225,8 @@ struct RoutineStrip: View {
     var swings: Int
     var shots: Int
     var ballLocked: Bool
+    /// True when the impact sound was detected and the auto-stop is counting down.
+    var impactHeard: Bool = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -233,17 +235,20 @@ struct RoutineStrip: View {
             step(icon: "figure.golf", title: swings > 0 ? "\(swings) SWING\(swings == 1 ? "" : "S")" : "PRACTICE",
                  done: swings > 0, active: isRecording && shots == 0)
             divider
-            step(icon: shots > 0 ? "checkmark.seal.fill" : "circle.dotted",
-                 title: shots > 0 ? "SHOT ✓" : (ballLocked ? "HIT" : "TEE UP"),
-                 done: shots > 0, active: isRecording && shots == 0 && swings > 0)
+            step(icon: (shots > 0 || impactHeard) ? "checkmark.seal.fill" : "circle.dotted",
+                 title: shots > 0 ? "SHOT ✓" : (impactHeard ? "IMPACT ✓" : (ballLocked ? "HIT" : "TEE UP")),
+                 done: shots > 0 || impactHeard, active: isRecording && shots == 0 && swings > 0 && !impactHeard)
             divider
-            step(icon: "stop.circle", title: "STOP", done: false, active: isRecording && shots > 0)
+            step(icon: impactHeard ? "stop.circle.fill" : "stop.circle",
+                 title: impactHeard ? "STOPPING" : "STOP",
+                 done: false, active: impactHeard || (isRecording && shots > 0))
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 8)
         .glassCapsule()
         .animation(Theme.Motion.snappy, value: swings)
         .animation(Theme.Motion.snappy, value: shots)
+        .animation(Theme.Motion.snappy, value: impactHeard)
         .accessibilityElement(children: .combine)
     }
 

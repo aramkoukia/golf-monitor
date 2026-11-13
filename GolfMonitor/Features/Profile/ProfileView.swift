@@ -29,12 +29,16 @@ struct ProfileView: View {
                     Picker("Recording limit", selection: $settings.maxRecordingMinutes) {
                         ForEach(SettingsStore.recordingLimitOptions, id: \.self) { Text("\($0) min").tag($0) }
                     }
+                    Toggle("Auto-stop on impact", isOn: Binding(
+                        get: { settings.captureTrigger == .auto },
+                        set: { settings.captureTrigger = $0 ? .auto : .timer }
+                    ))
                     Toggle("Speak results", isOn: $settings.voiceReadout)
                     Toggle("Haptics", isOn: $settings.hapticsEnabled)
                 } header: {
                     Text("Capture")
                 } footer: {
-                    Text("Face-on measures ball speed, launch and carry; down-the-line analyzes the swing. A fast shutter (1/2000) freezes the ball — use Auto in dim light.")
+                    Text("Face-on measures ball speed, launch and carry; down-the-line analyzes the swing. A fast shutter (1/2000) freezes the ball — use Auto in dim light. Auto-stop uses the microphone to hear the ball and stop the recording hands-free ~2 s after impact.")
                 }
 
                 Section {

@@ -100,7 +100,8 @@ struct RangeView: View {
             }
             Spacer()
             RoutineStrip(isRecording: session.phase.isRecording, swings: session.live.swings,
-                         shots: session.live.shots, ballLocked: session.scene.isBallLocked)
+                         shots: session.live.shots, ballLocked: session.scene.isBallLocked,
+                         impactHeard: session.impactHeard)
             controls(club: club)
         }
         .padding(.horizontal, 16)

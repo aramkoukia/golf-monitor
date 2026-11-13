@@ -51,6 +51,8 @@ final class RangeSessionController: ObservableObject {
     @Published private(set) var isAppActive = true
     /// Bumped whenever the camera's readiness may have changed (for the UI).
     @Published private(set) var lastRejection: String?
+    /// True from the moment an impact sound is detected until the auto-stop fires.
+    @Published private(set) var impactHeard = false
 
     @Published var club: Club {
         didSet {
@@ -63,6 +65,7 @@ final class RangeSessionController: ObservableObject {
     let camera: RecordingDevice
     let monitor: SceneMonitor
     let bumpDetector: BumpDetector
+    let impactDetector: ImpactDetector
     private let processor: SessionProcessing
     private let settings: SettingsStore
     private let store: ShotStore
@@ -88,6 +91,7 @@ final class RangeSessionController: ObservableObject {
     private var limitTask: Task<Void, Never>?
     private var liveTask: Task<Void, Never>?
     private var processingTask: Task<Void, Never>?
+    private var impactAutoStopTask: Task<Void, Never>?
     private let epoch = UUID()
     private(set) var revision = 0
     private var cancellables = Set<AnyCancellable>()
@@ -99,6 +103,7 @@ final class RangeSessionController: ObservableObject {
         self.camera = camera
         self.monitor = monitor
         self.bumpDetector = BumpDetector()
+        self.impactDetector = ImpactDetector()
         self.processor = processor
         self.settings = settings
         self.store = store
@@ -116,6 +121,22 @@ final class RangeSessionController: ObservableObject {
                 self.changed()
             }
             .store(in: &cancellables)
+    }
+
+    // Called from start() after self is fully initialized.
+    private func wireImpactDetector() {
+        impactDetector.onImpact = { [weak self] in
+            guard let self, self.phase.isRecording,
+                  self.settings.captureTrigger == .auto else { return }
+            self.impactHeard = true
+            self.changed()
+            let delay = self.impactDetector.autoStopDelay
+            self.impactAutoStopTask = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                guard !Task.isCancelled, let self, self.phase.isRecording else { return }
+                self.stop(origin: .system)
+            }
+        }
     }
 
     // MARK: Commands
@@ -144,10 +165,16 @@ final class RangeSessionController: ObservableObject {
         recordingHostStart = hostTime()
         live = LiveCounts()
         lastRejection = nil
+        impactHeard = false
         phase = .recording(startedAt: now())
         // Stop the bump detector while recording — we no longer need pre-shot
         // bump warnings, and we don't want to flag the user's own swing.
         bumpDetector.stopWatching()
+        // Start listening for the impact crack (auto mode only).
+        if settings.captureTrigger == .auto {
+            wireImpactDetector()
+            impactDetector.startListening()
+        }
         if origin == .watch { router?.tab = .range }
         scheduleTimeLimit()
         startLiveCounting()
@@ -160,6 +187,9 @@ final class RangeSessionController: ObservableObject {
         guard phase.isRecording else { return reject("Nothing is recording.") }
         limitTask?.cancel()
         liveTask?.cancel()
+        impactAutoStopTask?.cancel()
+        impactDetector.stopListening()
+        impactHeard = false
         progress = .start
         phase = .processing
         changed()
@@ -180,6 +210,9 @@ final class RangeSessionController: ObservableObject {
         case .recording:
             limitTask?.cancel()
             liveTask?.cancel()
+            impactAutoStopTask?.cancel()
+            impactDetector.stopListening()
+            impactHeard = false
             camera.cancelRecording()
         case .processing:
             processingTask?.cancel()

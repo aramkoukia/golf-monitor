@@ -207,7 +207,8 @@ the Range screen, watch, or video import is remembered.
 - Record button with a ring that fills toward the recording limit, a
   recording clock, and a red glow around the screen while recording.
 - Routine strip (START → PRACTICE → HIT → STOP) with live swing and shot
-  counts.
+  counts. When **Auto-stop on impact** is on and the crack is heard, the strip
+  shows **IMPACT ✓ / STOPPING** and the recording ends hands-free ~2 s later.
 - Analyzing screen with progress through "Finding your shot", "Measuring ball
   flight", "Reading your swing" and "Saving". Analysis can be cancelled, and
   it keeps running briefly if the phone locks.
@@ -383,6 +384,7 @@ accurate.
 | Camera position | Face-On / Down the Line | Face-On |
 | Shutter | Auto, 1/1000, 1/2000, 1/4000 | 1/2000 |
 | Recording limit | 1, 2, 3, 5, 10 min | 3 min |
+| Auto-stop on impact | on / off | on |
 | Speak results | on / off | on |
 | Haptics | on / off | on |
 | Save shot videos to Photos | on / off | off |
@@ -466,11 +468,19 @@ can trust.
   and trends by default (user can include them).
 - Done when: a smash factor of 1.9 never reaches a trend chart silently.
 
-**0.3 Audio-triggered capture** (M)
+**0.3 Audio-triggered capture** (M) — *auto-stop shipped*
 
-- Detect the impact sound with AVAudioEngine and keep a rolling 2 s buffer so
-  the swing is already captured. Hands-free, far less storage, enables real
-  multi-shot sessions.
+- ✅ **Impact detection:** `ImpactDetector` (AVAudioEngine, 44.1 kHz input tap)
+  listens during a recording and fires when it hears the sharp transient of a
+  ball strike. A dynamic background level tracker rejects ambient noise; a
+  50 ms duration gate ignores single-sample spikes. When impact is detected,
+  the routine strip shows **IMPACT ✓ / STOPPING** and the recording auto-stops
+  2 s later — enough for `ShotFinder`'s 1.4 s post-roll window. Toggleable via
+  **Profile › Auto-stop on impact** (on by default). The mic is active only
+  while recording; audio is never stored.
+- Remaining: rolling pre-impact buffer (currently the camera rolls continuously
+  from the moment the user presses record, so this is less critical than
+  originally scoped).
 - Done when: a 20-shot session needs zero taps after "Start".
 
 **0.4 Setup assistant and bump detection** (S–M) — *bump detection shipped*
