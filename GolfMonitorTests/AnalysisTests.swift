@@ -224,4 +224,22 @@ final class AnalysisTests: XCTestCase {
         XCTAssertEqual(points.map(\.value), [100, 110])
         XCTAssertEqual(SessionTrend.points(shots: shots, sessionID: UUID(), metric: .tempo).count, 0)
     }
+
+    func testClubGappingOrdersMeasuredClubsAndComputesAdjacentGaps() {
+        let rows = ClubGapping.rows([
+            .init(club: .iron7, count: 4, ballSpeedMph: 100, carryYards: 150),
+            .init(club: .driver, count: 2, ballSpeedMph: 140, carryYards: 230),
+            .init(club: .iron9, count: 1, ballSpeedMph: 90, carryYards: 130),
+            .init(club: .wood5, count: 0, ballSpeedMph: 120, carryYards: 190),
+            .init(club: .iron8, count: 3, ballSpeedMph: .nan, carryYards: 140),
+        ])
+
+        XCTAssertEqual(rows.map(\.club), [.driver, .iron7, .iron9])
+        XCTAssertNil(rows[0].ballSpeedGapMph)
+        XCTAssertEqual(rows[1].ballSpeedGapMph, 40)
+        XCTAssertEqual(rows[1].carryGapYards, 80)
+        XCTAssertEqual(rows[2].ballSpeedGapMph, 10)
+        XCTAssertEqual(rows[2].carryGapYards, 20)
+        XCTAssertEqual(rows[2].count, 1)
+    }
 }

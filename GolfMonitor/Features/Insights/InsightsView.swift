@@ -48,6 +48,7 @@ struct InsightsView: View {
                             }
                             if !measuredShots.isEmpty {
                                 carryTrend
+                                clubGapping
                                 clubSummary
                             }
                         }
@@ -197,6 +198,80 @@ struct InsightsView: View {
         .insightPanel()
     }
 
+    private var clubGapping: some View {
+        let rows = ClubGapping.rows(Club.allCases.compactMap { club -> ClubGapping.Measurement? in
+            let averages = store.averages(for: club)
+            guard averages.count > 0 else { return nil }
+            return ClubGapping.Measurement(club: club, count: averages.count,
+                                           ballSpeedMph: averages.ballSpeedMph,
+                                           carryYards: averages.carryYards)
+        })
+
+        return VStack(alignment: .leading, spacing: 12) {
+            Text("Club gapping").font(.headline)
+            Text("Average ball speed is measured. Carry is a flight-model estimate.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if rows.count < 2 {
+                Text("Record measured shots with at least two clubs to compare gaps.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            } else {
+                Chart(rows) { row in
+                    BarMark(
+                        x: .value("Ball speed", row.ballSpeedMph),
+                        y: .value("Club", row.club.shortName)
+                    )
+                    .foregroundStyle(Theme.Palette.ion)
+                }
+                .chartXScale(domain: 0...(max(rows.map(\.ballSpeedMph).max() ?? 1, 1) * 1.15))
+                .chartXAxisLabel("Ball speed (mph)")
+                .chartYScale(domain: Array(rows.map(\.club.shortName).reversed()))
+                .frame(height: CGFloat(rows.count * 34 + 12))
+
+                ForEach(rows) { row in
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 8) {
+                            Text(row.club.shortName)
+                                .font(.subheadline.weight(.semibold))
+                                .frame(width: 34, alignment: .leading)
+                            Text("\(Int(settings.speedValue(mph: row.ballSpeedMph).rounded())) \(settings.speedUnitLabel)")
+                                .monospacedDigit()
+                            Text("~\(formatDistance(yards: row.carryYards, settings: settings))")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Spacer(minLength: 0)
+                        }
+                        HStack {
+                            Text("\(row.count) \(row.count == 1 ? "shot" : "shots")")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            if let gap = row.ballSpeedGapMph {
+                                HStack(spacing: 8) {
+                                    Text("\(gap >= 0 ? "+" : "")\(Int(settings.speedValue(mph: gap).rounded())) \(settings.speedUnitLabel) vs prev")
+                                        .font(.caption.monospacedDigit())
+                                        .foregroundStyle(Theme.Palette.ion)
+                                    if let carryGap = row.carryGapYards {
+                                        let sign = carryGap >= 0 ? "+" : "−"
+                                        Text("\(sign)~\(formatDistance(yards: abs(carryGap), settings: settings))")
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .font(.subheadline)
+                }
+                Text("Gaps compare each club with the previous club shown. Small samples and estimated carry can make apparent gaps unreliable.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .insightPanel()
+    }
+
     private func insightCard(_ title: String, _ value: String, icon: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Image(systemName: icon).foregroundStyle(Theme.Palette.plasma)
@@ -206,6 +281,47 @@ struct InsightsView: View {
         .frame(maxWidth: .infinity, minHeight: 92, alignment: .leading)
         .padding()
         .insightPanel()
+    }
+}
+
+struct ClubGapRow: Identifiable {
+    let club: Club
+    let count: Int
+    let ballSpeedMph: Double
+    let carryYards: Double
+    let ballSpeedGapMph: Double?
+    let carryGapYards: Double?
+
+    var id: Club { club }
+}
+
+enum ClubGapping {
+    struct Measurement {
+        let club: Club
+        let count: Int
+        let ballSpeedMph: Double
+        let carryYards: Double
+    }
+
+    static func rows(_ measurements: [Measurement]) -> [ClubGapRow] {
+        let valid = measurements
+            .filter {
+                $0.count > 0 && $0.ballSpeedMph.isFinite && $0.ballSpeedMph > 0 &&
+                $0.carryYards.isFinite && $0.carryYards > 0
+            }
+            .sorted { $0.club.bagOrder < $1.club.bagOrder }
+
+        return valid.enumerated().map { index, measurement in
+            let previous = index > 0 ? valid[index - 1] : nil
+            return ClubGapRow(
+                club: measurement.club,
+                count: measurement.count,
+                ballSpeedMph: measurement.ballSpeedMph,
+                carryYards: measurement.carryYards,
+                ballSpeedGapMph: previous.map { $0.ballSpeedMph - measurement.ballSpeedMph },
+                carryGapYards: previous.map { $0.carryYards - measurement.carryYards }
+            )
+        }
     }
 }
 

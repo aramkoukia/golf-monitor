@@ -257,6 +257,8 @@ the Range screen, watch, or video import is remembered.
 **Insights**
 - Measured shots, average carry, average ball speed and best carry.
 - A carry trend chart of the last 20 measured shots.
+- Club gapping ladder with measured average ball speed and explicitly
+  estimated carry, plus differences from the previous club shown.
 - Within-session ball-speed, launch-angle or tempo trend by shot number for the
   most recent session with multiple measured shots. This is descriptive
   variation, not a fatigue diagnosis.
@@ -528,9 +530,10 @@ can trust.
 
 **1.5 Club gapping ladder and yardage card** (M)
 
-- Ball-speed gaps between clubs (reliable) alongside carry estimates (flagged
-  as estimates). Highlight overlaps and big gaps. Export as an image/PDF;
-  later a widget and Watch complication.
+- Shipped in part: Insights shows average measured ball speed and estimated
+  carry by club, with adjacent-club differences and sample counts.
+- Remaining: validate overlap/gap interpretation; export a yardage card as an
+  image/PDF, then consider a widget and Watch complication.
 
 **1.6 Goals and streaks** (S–M)
 
