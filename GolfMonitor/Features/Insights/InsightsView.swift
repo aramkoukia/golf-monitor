@@ -5,11 +5,19 @@ struct InsightsView: View {
     @EnvironmentObject private var store: ShotStore
     @EnvironmentObject private var settings: SettingsStore
     @EnvironmentObject private var router: AppRouter
+    @State private var sessionTrendMetric: SessionTrendMetric = .ballSpeed
 
     private var measuredShots: [Shot] { store.shots.filter(\.hasLaunchData) }
     private var chartShots: [Shot] { Array(measuredShots.prefix(20).reversed()) }
     private var tempoRatios: [Double] {
         store.shots.map(\.tempoRatio).filter { $0.isFinite && $0 > 0 }
+    }
+    private var recentTrendSession: PracticeSession? {
+        store.sessions.first { session in
+            SessionTrendMetric.allCases.contains { metric in
+                SessionTrend.points(shots: store.shots, sessionID: session.id, metric: metric).count >= 2
+            }
+        }
     }
 
     var body: some View {
@@ -34,6 +42,9 @@ struct InsightsView: View {
                             }
                             if !tempoRatios.isEmpty {
                                 tempoTrend
+                            }
+                            if let recentTrendSession {
+                                sessionTrend(recentTrendSession)
                             }
                             if !measuredShots.isEmpty {
                                 carryTrend
@@ -77,6 +88,55 @@ struct InsightsView: View {
             .frame(height: 180)
             .accessibilityLabel("Histogram of swing tempo ratios")
             .accessibilityValue("\(onTargetCount) of \(tempoRatios.count) swings are in the target band")
+        }
+        .insightPanel()
+    }
+
+    private func sessionTrend(_ session: PracticeSession) -> some View {
+        let points = SessionTrend.points(shots: store.shots, sessionID: session.id,
+                                         metric: sessionTrendMetric)
+        let average = points.isEmpty ? nil : points.map(\.value).reduce(0, +) / Double(points.count)
+        return VStack(alignment: .leading, spacing: 12) {
+            Text("Within-session trend").font(.headline)
+            Text(session.title.isEmpty ? session.start.formatted(date: .abbreviated, time: .shortened) : session.title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Picker("Metric", selection: $sessionTrendMetric) {
+                ForEach(SessionTrendMetric.allCases) { metric in
+                    Text(metric.title).tag(metric)
+                }
+            }
+            .pickerStyle(.segmented)
+            if points.count < 2 {
+                Text("Not enough \(sessionTrendMetric.title.lowercased()) measurements in this session.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            } else {
+                if let average {
+                    Text("Average \(sessionTrendMetric.title.lowercased()): \(sessionTrendMetric.format(average)) · \(points.count) shots")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Chart(points) { point in
+                    LineMark(
+                        x: .value("Shot", point.shotNumber),
+                        y: .value(sessionTrendMetric.title, point.value)
+                    )
+                    .foregroundStyle(Theme.Palette.plasma)
+                    .interpolationMethod(.linear)
+                    PointMark(
+                        x: .value("Shot", point.shotNumber),
+                        y: .value(sessionTrendMetric.title, point.value)
+                    )
+                    .foregroundStyle(Theme.Palette.tracerCore)
+                }
+                .chartXAxisLabel("Shot number")
+                .chartYAxisLabel(sessionTrendMetric.unit)
+                .frame(height: 180)
+            }
+            Text("Descriptive session variation only; this does not diagnose fatigue or explain why values changed.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
         .insightPanel()
     }
@@ -146,6 +206,75 @@ struct InsightsView: View {
         .frame(maxWidth: .infinity, minHeight: 92, alignment: .leading)
         .padding()
         .insightPanel()
+    }
+}
+
+enum SessionTrendMetric: String, CaseIterable, Identifiable {
+    case ballSpeed
+    case launch
+    case tempo
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .ballSpeed: return "Ball speed"
+        case .launch: return "Launch"
+        case .tempo: return "Tempo"
+        }
+    }
+
+    var unit: String {
+        switch self {
+        case .ballSpeed: return "mph"
+        case .launch: return "°"
+        case .tempo: return ":1"
+        }
+    }
+
+    func value(from shot: Shot) -> Double? {
+        let value: Double
+        switch self {
+        case .ballSpeed:
+            value = shot.ballSpeedMph
+        case .launch:
+            guard shot.hasLaunchData, shot.launchAngleDeg.isFinite else { return nil }
+            value = shot.launchAngleDeg
+        case .tempo:
+            value = shot.tempoRatio
+        }
+        guard value.isFinite else { return nil }
+        switch self {
+        case .launch:
+            guard shot.hasLaunchData else { return nil }
+        case .ballSpeed, .tempo:
+            guard value > 0 else { return nil }
+        }
+        return value
+    }
+
+    func format(_ value: Double) -> String {
+        String(format: "%.1f %@", value, unit)
+    }
+}
+
+struct SessionTrendPoint: Identifiable {
+    let shotNumber: Int
+    let value: Double
+
+    var id: Int { shotNumber }
+}
+
+enum SessionTrend {
+    static func points(shots: [Shot], sessionID: UUID, metric: SessionTrendMetric) -> [SessionTrendPoint] {
+        shots
+            .filter { $0.sessionID == sessionID }
+            .sorted { $0.date < $1.date }
+            .enumerated()
+            .compactMap { index, shot in
+                guard let value = metric.value(from: shot) else { return nil }
+                return SessionTrendPoint(shotNumber: index + 1, value: value)
+            }
     }
 }
 

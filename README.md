@@ -257,6 +257,9 @@ the Range screen, watch, or video import is remembered.
 **Insights**
 - Measured shots, average carry, average ball speed and best carry.
 - A carry trend chart of the last 20 measured shots.
+- Within-session ball-speed, launch-angle or tempo trend by shot number for the
+  most recent session with multiple measured shots. This is descriptive
+  variation, not a fatigue diagnosis.
 - Average carry by club.
 - Tempo-ratio histogram and percentage of tracked swings in the 2.7–3.3:1
   target band. Tempo is estimated from detected swing phases.
@@ -518,9 +521,10 @@ can trust.
 
 **1.4 Warm-up and fatigue curve** (S)
 
-- Plot each metric against shot number within a session; detect when quality
-  drops and suggest an ideal session length. Uses data we already have, and no
-  competitor listing I found does this.
+- Shipped in part: Insights plots ball speed, launch angle or tempo against
+  shot number within the most recent session with multiple measurements.
+- Remaining: validate any quality-drop detection before suggesting fatigue or
+  an ideal session length.
 
 **1.5 Club gapping ladder and yardage card** (M)
 

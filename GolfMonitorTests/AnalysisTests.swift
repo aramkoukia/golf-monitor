@@ -201,4 +201,27 @@ final class AnalysisTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(TempoTrend.onTargetPercentage(ratios)), 3.0 / 9.0, accuracy: 0.0001)
         XCTAssertNil(TempoTrend.onTargetPercentage([0, .nan, .infinity]))
     }
+
+    func testSessionTrendOrdersShotsAndOmitsUnmeasuredValues() throws {
+        let sessionID = UUID()
+        let shots = [
+            Shot(date: Date(timeIntervalSince1970: 30), club: .iron7, ballSpeedMph: 0,
+                 clubSpeedMph: 0, launchAngleDeg: 0, carryYards: 0, apexYards: 0,
+                 hangTimeS: 0, smashFactor: 0, tempoRatio: 0, offlineYards: 0, sessionID: sessionID),
+            Shot(date: Date(timeIntervalSince1970: 20), club: .iron7, ballSpeedMph: 110,
+                 clubSpeedMph: 0, launchAngleDeg: 15, carryYards: 0, apexYards: 0,
+                 hangTimeS: 0, smashFactor: 0, tempoRatio: 3, offlineYards: 0, sessionID: sessionID),
+            Shot(date: Date(timeIntervalSince1970: 10), club: .iron7, ballSpeedMph: 100,
+                 clubSpeedMph: 0, launchAngleDeg: 14, carryYards: 0, apexYards: 0,
+                 hangTimeS: 0, smashFactor: 0, tempoRatio: 2.8, offlineYards: 0, sessionID: sessionID),
+            Shot(date: Date(timeIntervalSince1970: 5), club: .iron7, ballSpeedMph: 200,
+                 clubSpeedMph: 0, launchAngleDeg: 20, carryYards: 0, apexYards: 0,
+                 hangTimeS: 0, smashFactor: 0, tempoRatio: 4, offlineYards: 0),
+        ]
+
+        let points = SessionTrend.points(shots: shots, sessionID: sessionID, metric: .ballSpeed)
+        XCTAssertEqual(points.map(\.shotNumber), [1, 2])
+        XCTAssertEqual(points.map(\.value), [100, 110])
+        XCTAssertEqual(SessionTrend.points(shots: shots, sessionID: UUID(), metric: .tempo).count, 0)
+    }
 }
