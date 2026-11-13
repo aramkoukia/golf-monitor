@@ -232,6 +232,7 @@ private struct StatusPill: View {
         case .noBall: return "viewfinder"
         case .ballAtEdge: return "arrow.left.and.right"
         case .tooDark: return "sun.min"
+        case .phoneMoved: return "exclamationmark.arrow.triangle.2.circlepath"
         }
     }
 
@@ -239,7 +240,7 @@ private struct StatusPill: View {
         switch readiness {
         case .ready, .readySwingOnly: return WatchPalette.ion
         case .noBall: return WatchPalette.floodlight
-        case .ballAtEdge, .tooDark: return WatchPalette.caution
+        case .ballAtEdge, .tooDark, .phoneMoved: return WatchPalette.caution
         }
     }
 }

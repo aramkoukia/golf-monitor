@@ -99,4 +99,23 @@ final class RecordingReadinessTests: XCTestCase {
         monitor.reset()
         XCTAssertNil(monitor.currentSnapshot.brightness)
     }
+
+    func testPhoneMovedTakesPriorityOverOtherReadinessChecks() {
+        // phoneMoved surfaces before ball-lock, darkness, edge, etc.
+        let ball = scene(balls: [0.4], brightness: 0.45)
+        var moved = RecordingReadiness.Inputs(scene: ball, cameraView: .faceOn,
+                                             handedness: .right, fixedShutter: true, phoneMoved: true)
+        XCTAssertEqual(check.evaluate(moved), .phoneMoved)
+        XCTAssertFalse(RemoteReadiness.phoneMoved.isReady)
+
+        // Even with no ball locked.
+        moved = RecordingReadiness.Inputs(scene: scene(), cameraView: .faceOn,
+                                         handedness: .right, fixedShutter: true, phoneMoved: true)
+        XCTAssertEqual(check.evaluate(moved), .phoneMoved)
+
+        // Not fired when phoneMoved is false.
+        let notMoved = RecordingReadiness.Inputs(scene: ball, cameraView: .faceOn,
+                                                handedness: .right, fixedShutter: true, phoneMoved: false)
+        XCTAssertEqual(check.evaluate(notMoved), .ready)
+    }
 }

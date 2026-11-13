@@ -149,6 +149,9 @@ enum RemoteReadiness: String, Codable, Sendable, CaseIterable {
     case ballAtEdge
     /// Too dark for the fixed fast shutter: the ball may not be tracked.
     case tooDark
+    /// The phone moved after a ball was locked, so the calibration baseline
+    /// is no longer valid. Re-tee or wait for the ball to re-lock.
+    case phoneMoved
 
     var isReady: Bool { self == .ready || self == .readySwingOnly }
 
@@ -160,6 +163,7 @@ enum RemoteReadiness: String, Codable, Sendable, CaseIterable {
         case .noBall: return "NO BALL LOCKED"
         case .ballAtEdge: return "MOVE BALL"
         case .tooDark: return "TOO DARK"
+        case .phoneMoved: return "PHONE MOVED"
         }
     }
 
@@ -171,6 +175,7 @@ enum RemoteReadiness: String, Codable, Sendable, CaseIterable {
         case .noBall: return "Tee a ball in view — your wrist taps when it locks."
         case .ballAtEdge: return "The ball is near the edge it flies out of. Give it room in front."
         case .tooDark: return "Too dark for the fast shutter. Add light, or set Shutter to Auto."
+        case .phoneMoved: return "The phone moved after the ball locked — step back so the ball re-locks."
         }
     }
 }

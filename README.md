@@ -151,6 +151,7 @@ button. It's advice only: you can always start.
 | **No ball locked** | No ball has been seen sitting still yet | Tee a ball in view and step back for ~1.5 s |
 | **Move ball** | Every locked ball is in the last quarter of the frame on the target side (the right for a right-hander, the left for a left-hander), so it would leave the frame before it's tracked | Aim the phone or move the ball so there's room in front of it |
 | **Too dark** | The frame is very dark at the fixed fast shutter | Add light, or set Profile › Shutter to Auto |
+| **Phone moved** | The phone moved after the ball locked, invalidating the distance calibration | Step back so the ball re-locks before you swing |
 
 ### What the app is looking for
 
@@ -472,11 +473,16 @@ can trust.
   multi-shot sessions.
 - Done when: a 20-shot session needs zero taps after "Start".
 
-**0.4 Setup assistant and bump detection** (S–M)
+**0.4 Setup assistant and bump detection** (S–M) — *bump detection shipped*
 
-- Level and pitch check with CoreMotion, live ball-size/distance gauge against
-  the 0.5–2.0 m window, and a warning when the phone moves after calibration
-  (accelerometer spike).
+- ✅ **Bump detection:** `BumpDetector` (CoreMotion, 50 Hz accelerometer) starts
+  watching when a ball locks and fires a `PHONE MOVED` warning on the Range
+  screen and Watch if the phone moves before you swing. The accelerometer uses
+  a low-pass gravity filter plus a 50 ms duration gate to avoid false triggers.
+  Recording is never blocked — the warning is advisory, matching the app's
+  "ready to swing" philosophy.
+- Remaining: level and pitch check, live ball-size/distance gauge against the
+  0.5–2.0 m window.
 - Optional: on LiDAR iPhones, use ARKit depth to confirm distance to the ball.
 - Done when: a moved tripod is caught before it corrupts a session.
 

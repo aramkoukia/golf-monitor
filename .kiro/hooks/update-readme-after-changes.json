@@ -1,0 +1,13 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Update README after implementation",
+      "trigger": "Stop",
+      "action": {
+        "type": "agent",
+        "prompt": "After completing any implementation work, check if any Swift source files were created or modified. If they were, update README.md to reflect the changes: mark implemented roadmap items as done, add new features to the relevant Features section, and update any status notes. Keep the README's existing style and structure."
+      }
+    }
+  ]
+}

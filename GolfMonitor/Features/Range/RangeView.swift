@@ -150,6 +150,8 @@ struct RangeView: View {
                            Theme.Palette.caution)
         case .tooDark: ("Too dark for the \(settings.shutterMode.title) shutter — add light or set Shutter to Auto",
                         "sun.min", Theme.Palette.caution)
+        case .phoneMoved: ("Phone moved — step back so the ball re-locks", "exclamationmark.arrow.triangle.2.circlepath",
+                           Theme.Palette.caution)
         }
         return Label(text, systemImage: icon)
             .font(.system(size: 12, weight: .semibold))

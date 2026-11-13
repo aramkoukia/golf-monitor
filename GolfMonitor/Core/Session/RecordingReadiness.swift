@@ -24,9 +24,14 @@ struct RecordingReadiness {
         /// A fixed shutter (1/1000…1/4000) is set. With Auto the camera
         /// lengthens the exposure itself, so darkness isn't flagged.
         var fixedShutter: Bool
+        /// The phone moved after a ball was locked, invalidating calibration.
+        var phoneMoved: Bool = false
     }
 
     func evaluate(_ inputs: Inputs, previous: RemoteReadiness? = nil) -> RemoteReadiness {
+        // A bump invalidates the calibration baseline — warn before anything else
+        // so the user knows to re-tee rather than chase a brightness or edge fix.
+        if inputs.phoneMoved { return .phoneMoved }
         if inputs.fixedShutter, let brightness = inputs.scene.brightness {
             let bar = previous == .tooDark ? darkBelow + darkHysteresis : darkBelow
             if brightness < bar { return .tooDark }

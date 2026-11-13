@@ -62,6 +62,7 @@ final class RangeSessionController: ObservableObject {
 
     let camera: RecordingDevice
     let monitor: SceneMonitor
+    let bumpDetector: BumpDetector
     private let processor: SessionProcessing
     private let settings: SettingsStore
     private let store: ShotStore
@@ -89,6 +90,7 @@ final class RangeSessionController: ObservableObject {
     private var processingTask: Task<Void, Never>?
     private let epoch = UUID()
     private(set) var revision = 0
+    private var cancellables = Set<AnyCancellable>()
 
     static let clubKey = "golfmonitor.lastClub"
 
@@ -96,11 +98,24 @@ final class RangeSessionController: ObservableObject {
          settings: SettingsStore, store: ShotStore, defaults: UserDefaults = .standard) {
         self.camera = camera
         self.monitor = monitor
+        self.bumpDetector = BumpDetector()
         self.processor = processor
         self.settings = settings
         self.store = store
         self.defaults = defaults
         club = defaults.string(forKey: Self.clubKey).flatMap(Club.init(rawValue:)) ?? .iron7
+
+        // React to bump detector state changes so the readiness hint updates
+        // as soon as hasMoved flips, without waiting for the next snapshot.
+        bumpDetector.$hasMoved
+            .dropFirst()                    // skip initial false
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                self.refreshReadiness()
+                self.changed()
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: Commands
@@ -130,6 +145,9 @@ final class RangeSessionController: ObservableObject {
         live = LiveCounts()
         lastRejection = nil
         phase = .recording(startedAt: now())
+        // Stop the bump detector while recording — we no longer need pre-shot
+        // bump warnings, and we don't want to flag the user's own swing.
+        bumpDetector.stopWatching()
         if origin == .watch { router?.tab = .range }
         scheduleTimeLimit()
         startLiveCounting()
@@ -179,6 +197,7 @@ final class RangeSessionController: ObservableObject {
         outcome = nil
         feedback = nil
         phase = .idle
+        bumpDetector.reset()
         changed()
     }
 
@@ -198,6 +217,22 @@ final class RangeSessionController: ObservableObject {
         seenLockIDs.formUnion(newLocks.map(\.id))
         ballLocksSeen += newLocks.count
         scene = snapshot
+
+        // Start bump-watching when a new ball locks (we now have a calibration
+        // baseline worth protecting). Reset if the ball disappears and we lose
+        // all locks — the baseline is gone anyway.
+        if !newLocks.isEmpty {
+            bumpDetector.reset()
+            bumpDetector.startWatching()
+        } else if snapshot.locks.isEmpty {
+            bumpDetector.stopWatching()
+            bumpDetector.reset()
+        }
+
+        // If the bump detector just fired, force a readiness refresh so the
+        // hint updates immediately (the snapshot interval may be up to 150 ms).
+        if bumpDetector.hasMoved { refreshReadiness(); changed(); return }
+
         let readinessChanged = refreshReadiness()
         if lockChanged || !newLocks.isEmpty || readinessChanged { changed() }
     }
@@ -207,7 +242,8 @@ final class RangeSessionController: ObservableObject {
     func refreshReadiness() -> Bool {
         let next = readinessCheck.evaluate(
             RecordingReadiness.Inputs(scene: scene, cameraView: settings.cameraView, handedness: settings.handedness,
-                                      fixedShutter: settings.shutterMode.seconds != nil),
+                                      fixedShutter: settings.shutterMode.seconds != nil,
+                                      phoneMoved: bumpDetector.hasMoved),
             previous: readiness)
         guard next != readiness else { return false }
         readiness = next
