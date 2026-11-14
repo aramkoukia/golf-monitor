@@ -85,8 +85,9 @@ struct GlassGroup<Content: View>: View {
 
 // MARK: - Backgrounds
 
-/// "Floodlight Mesh": a slow 3×3 mesh (Void, Turf Night, a Turf Lit pool)
-/// behind screens that don't show the camera. Frozen under Reduce Motion.
+/// "Gold Standard" mesh: a slow 3×3 mesh (Void, Turf Night, a Turf Lit
+/// warm gold ember pool) behind screens that don't show the camera.
+/// Frozen under Reduce Motion.
 struct FloodlightBackground: View {
     var animated: Bool = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -106,7 +107,7 @@ struct FloodlightBackground: View {
                 colors: [
                     Theme.Palette.void, Theme.Palette.void, Theme.Palette.void,
                     Theme.Palette.void, Theme.Palette.turfNight, Theme.Palette.void,
-                    Theme.Palette.turfNight, Theme.Palette.turfLit.opacity(0.7), Theme.Palette.turfNight,
+                    Theme.Palette.turfNight, Theme.Palette.turfLit.opacity(0.6), Theme.Palette.turfNight,
                 ]
             )
         }

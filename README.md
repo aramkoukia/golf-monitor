@@ -399,10 +399,10 @@ Profile also shows:
 - **Privacy & AI:** ball detector and body pose run on device, and the
   network is never used.
 
-**Launch intro:** the launch screen opens straight into a ~2 s intro. The
-lock brackets snap onto the ball and the shot's tracer flies across a
-floodlit range, then it fades into the app. Tap to skip; Reduce Motion gets
-a plain fade.
+**Launch intro:** the launch screen opens straight into a ~2 s intro. Gold
+lock brackets snap onto the ball in the logo, the shot's tracer arc flies
+outward in molten gold, then it fades into the app. Tap to skip; Reduce
+Motion gets a plain fade.
 
 **First launch:** three onboarding pages cover tripod setup, the one-button
 routine, and privacy, with handedness and the Save-to-Photos choice. After

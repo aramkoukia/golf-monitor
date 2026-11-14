@@ -1,12 +1,9 @@
 import SwiftUI
 
-/// Launch intro. It starts exactly where the launch screen leaves off (same
-/// artwork, same aspect-fill layout), then the lock brackets snap onto the
-/// ball, the shot's tracer flies across the sky and lands, and it fades into
-/// the app. About 2 s; tap to skip; Reduce Motion gets a plain fade.
-///
-/// The artwork is rendered by `scripts/render-art.swift`; `Layout` mirrors
-/// its `SplashGeometry`.
+/// Launch intro. The logo (gold ball with orbital ring and crown) is
+/// displayed centered on a deep-black background. The lock brackets snap
+/// onto the ball in gold, the tracer arc launches from it, and it fades
+/// into the app. About 2 s; tap to skip; Reduce Motion gets a plain fade.
 struct SplashView: View {
     var onFinish: () -> Void
 
@@ -14,46 +11,73 @@ struct SplashView: View {
     @State private var start = Date()
     @State private var leaving = false
 
+    // The logo is 1024×1024. Ball center is roughly at (51%, 56%) of the
+    // image; radius ≈ 36% of half the image width.
     enum Layout {
-        static let image = CGSize(width: 1179, height: 2556)
-        /// Fractions of the artwork (x of width, y of height).
-        static let ball = CGPoint(x: 0.30, y: 0.712)
-        /// Fraction of the artwork's width.
-        static let ballRadius: CGFloat = 0.088
-        static let control1 = CGPoint(x: 0.40, y: 0.26)
-        static let control2 = CGPoint(x: 0.80, y: 0.24)
-        static let landing = CGPoint(x: 0.90, y: 0.598)
+        static let image = CGSize(width: 1024, height: 1024)
+        static let ball = CGPoint(x: 0.50, y: 0.555)
+        static let ballRadius: CGFloat = 0.195   // fraction of image width
+        static let control1 = CGPoint(x: 0.62, y: 0.20)
+        static let control2 = CGPoint(x: 0.90, y: 0.22)
+        static let landing  = CGPoint(x: 0.96, y: 0.52)
     }
 
-    /// Timeline, in seconds after the intro appears.
     enum Beat {
-        static let lock = 0.15...0.5
-        static let flight = 0.55...1.45
-        static let landing = 1.45...1.95
-        static let leave = 2.0
+        static let lock    = 0.15...0.55
+        static let flight  = 0.60...1.50
+        static let landing = 1.50...2.00
+        static let leave   = 2.1
     }
 
     var body: some View {
         GeometryReader { geo in
-            let map = ArtworkMap(image: Layout.image, view: geo.size)
+            // Size the logo so it fills ~80% of the shorter screen dimension,
+            // centered, so the black icon corners show the app background.
+            let logoSize = min(geo.size.width, geo.size.height) * 0.78
+            let map = ArtworkMap(image: Layout.image,
+                                 view: CGSize(width: logoSize, height: logoSize))
             ZStack {
+                // Pure black background — matches icon and LaunchBackground.
+                Theme.Palette.void.ignoresSafeArea()
+
+                // Subtle radial gold glow behind the logo for depth.
+                RadialGradient(
+                    colors: [Theme.Palette.goldDeep.opacity(0.35), .clear],
+                    center: .center,
+                    startRadius: 0,
+                    endRadius: logoSize * 0.65
+                )
+                .frame(width: logoSize * 1.3, height: logoSize * 1.3)
+
+                // Logo image, centered.
                 Image("GolfMonitorSplash")
                     .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: geo.size.width, height: geo.size.height)
-                    .clipped()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: logoSize, height: logoSize)
+                    .clipShape(RoundedRectangle(cornerRadius: logoSize * 0.225, style: .continuous))
+
+                // Animation canvas, full screen.
                 if !reduceMotion {
                     TimelineView(.animation) { timeline in
-                        Canvas { context, _ in
-                            draw(in: &context, map: map, t: timeline.date.timeIntervalSince(start))
+                        Canvas { context, size in
+                            // Offset the map so it lines up with the centered logo.
+                            let originX = (size.width - logoSize) / 2
+                            let originY = (size.height - logoSize) / 2
+                            var shifted = context
+                            shifted.translateBy(x: originX, y: originY)
+                            draw(in: &shifted, map: map,
+                                 t: timeline.date.timeIntervalSince(start),
+                                 canvasSize: size)
                         }
                     }
+                    .frame(width: geo.size.width, height: geo.size.height)
                 }
             }
+            .frame(width: geo.size.width, height: geo.size.height)
         }
         .ignoresSafeArea()
         .opacity(leaving ? 0 : 1)
-        .scaleEffect(leaving ? 1.05 : 1)
+        .scaleEffect(leaving ? 1.04 : 1)
         .contentShape(Rectangle())
         .onTapGesture { finish() }
         .accessibilityElement()
@@ -68,30 +92,27 @@ struct SplashView: View {
 
     private func finish() {
         guard !leaving else { return }
-        withAnimation(.easeIn(duration: 0.35)) {
-            leaving = true
-        } completion: {
-            onFinish()
-        }
+        withAnimation(.easeIn(duration: 0.35)) { leaving = true } completion: { onFinish() }
     }
 
     // MARK: Drawing
 
-    private func draw(in context: inout GraphicsContext, map: ArtworkMap, t: Double) {
+    private func draw(in context: inout GraphicsContext, map: ArtworkMap, t: Double, canvasSize: CGSize) {
         let center = map.point(Layout.ball)
         let radius = map.length(Layout.ballRadius)
-        let flight = Flight(p0: CGPoint(x: center.x + radius * 0.2, y: center.y - radius * 0.35),
+        let flight = Flight(p0: CGPoint(x: center.x + radius * 0.15, y: center.y - radius * 0.3),
                             c1: map.point(Layout.control1), c2: map.point(Layout.control2),
                             p3: map.point(Layout.landing))
 
-        // The tracer leaves from behind the ball.
         let flightProgress = eased(t, Beat.flight, curve: easeInOut)
         if flightProgress > 0 {
             var tracer = context
-            var outside = Path(CGRect(origin: .zero, size: map.view))
-            outside.addEllipse(in: CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2))
+            var outside = Path(CGRect(x: -canvasSize.width, y: -canvasSize.height,
+                                      width: canvasSize.width * 3, height: canvasSize.height * 3))
+            outside.addEllipse(in: CGRect(x: center.x - radius, y: center.y - radius,
+                                           width: radius * 2, height: radius * 2))
             tracer.clip(to: outside, style: FillStyle(eoFill: true))
-            drawTracer(in: &tracer, flight: flight, upTo: flightProgress, width: radius * 0.26)
+            drawTracer(in: &tracer, flight: flight, upTo: flightProgress, width: radius * 0.14)
         }
 
         let lock = eased(t, Beat.lock, curve: easeOutBack)
@@ -104,13 +125,13 @@ struct SplashView: View {
         let land = eased(t, Beat.landing, curve: easeOut)
         if land > 0, land < 1 {
             let end = flight.p3
-            let w = radius * (0.6 + 2.2 * land)
+            let w = radius * (0.4 + 1.8 * land)
             let ring = Path(ellipseIn: CGRect(x: end.x - w, y: end.y - w * 0.22, width: w * 2, height: w * 0.44))
             context.stroke(ring, with: .color(Theme.Palette.tracerCore.opacity(0.9 * (1 - land))), lineWidth: 2.5)
             var glow = context
             glow.addFilter(.blur(radius: 10))
             glow.fill(Path(ellipseIn: CGRect(x: end.x - 18, y: end.y - 18, width: 36, height: 36)),
-                      with: .color(Theme.Palette.tracerCore.opacity(1 - land)))
+                      with: .color(Theme.Palette.plasma.opacity((1 - land) * 0.8)))
         }
     }
 
@@ -136,7 +157,7 @@ struct SplashView: View {
         var near = context
         near.addFilter(.blur(radius: width * 0.45))
         strokes(&near, widthScale: 1.5, from: Theme.Palette.plasma, to: Theme.Palette.tracerCore.opacity(0.9))
-        strokes(&context, widthScale: 1, from: Color(red: 1, green: 0.54, blue: 0.24), to: Theme.Palette.tracerCore)
+        strokes(&context, widthScale: 1, from: Theme.Palette.plasma, to: Theme.Palette.tracerCore)
         strokes(&context, widthScale: 0.4, from: Theme.Palette.tracerCore, to: .white)
 
         // The ball itself, at the head of the tracer while it flies.
@@ -162,10 +183,13 @@ struct SplashView: View {
             path.addLine(to: CGPoint(x: x - sx * corner, y: y))
         }
         let style = StrokeStyle(lineWidth: max(2.5, radius * 0.09), lineCap: .round, lineJoin: .round)
+        // On the splash screen the brackets lock onto the golden ball,
+        // so they should glow gold rather than green.
+        let bracketColor = Theme.Palette.plasma
         var glow = context
         glow.addFilter(.blur(radius: radius * 0.18 + 10 * flash))
-        glow.stroke(path, with: .color(Theme.Palette.ion.opacity(opacity * (0.85 + 0.15 * flash))), style: style)
-        context.stroke(path, with: .color(Theme.Palette.ion.opacity(opacity)), style: style)
+        glow.stroke(path, with: .color(bracketColor.opacity(opacity * (0.85 + 0.15 * flash))), style: style)
+        context.stroke(path, with: .color(bracketColor.opacity(opacity)), style: style)
     }
 
     // MARK: Easing

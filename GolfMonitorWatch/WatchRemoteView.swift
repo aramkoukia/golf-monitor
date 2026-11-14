@@ -1,18 +1,21 @@
 import SwiftUI
 import WatchKit
 
-/// "Night Flight" colours for the watch (mirrors the phone's Theme).
+/// "Gold Standard" colours for the watch (mirrors the phone's Theme).
 enum WatchPalette {
-    static let void = Color(red: 0.02, green: 0.024, blue: 0.027)
-    static let carbon = Color(red: 0.05, green: 0.067, blue: 0.078)
-    static let floodlight = Color(red: 0.95, green: 0.96, blue: 0.95)
-    static let mist = Color(red: 0.6, green: 0.65, blue: 0.69)
-    static let plasma = Color(red: 1, green: 0.353, blue: 0.122)
-    static let tracer = Color(red: 1, green: 0.906, blue: 0.69)
-    static let ion = Color(red: 0.24, green: 0.96, blue: 0.65)
-    static let caution = Color(red: 1, green: 0.77, blue: 0.24)
-    static let red = Color(red: 1, green: 0.23, blue: 0.19)
-    static let turf = Color(red: 0.04, green: 0.18, blue: 0.13)
+    static let void    = Color(red: 0.039, green: 0.039, blue: 0.043)   // #0A0A0B
+    static let carbon  = Color(red: 0.067, green: 0.067, blue: 0.075)   // #111113
+    static let floodlight = Color(red: 0.949, green: 0.941, blue: 0.929) // #F2F0ED
+    static let mist    = Color(red: 0.604, green: 0.588, blue: 0.565)   // #9A9690
+    // Brand gold — matches icon's orbital ring
+    static let plasma  = Color(red: 0.788, green: 0.573, blue: 0.165)   // #C9922A
+    static let tracer  = Color(red: 0.961, green: 0.851, blue: 0.545)   // #F5D98B
+    // Functional / status (unchanged)
+    static let ion     = Color(red: 0.24,  green: 0.96,  blue: 0.65)
+    static let caution = Color(red: 1,     green: 0.77,  blue: 0.24)
+    static let red     = Color(red: 1,     green: 0.23,  blue: 0.19)
+    // Background warmth — dark amber ember instead of green turf
+    static let turf    = Color(red: 0.078, green: 0.059, blue: 0.027)   // #14100A
 
     static func tint(_ tone: RemoteScreenModel.Tone) -> Color {
         switch tone {
